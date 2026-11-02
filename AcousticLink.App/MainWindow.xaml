@@ -98,6 +98,14 @@
         <TextBlock x:Name="FdmDecodedText" Text="Sin decodificación FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBox x:Name="FdmDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
                  MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática FDM" />
+        <TextBlock Text="Última grabación finalizada · bits de datos por canal (1–16):" />
+        <TextBox x:Name="FdmSyncCountTextBox" Text="8" Padding="8" />
+        <Button x:Name="SynchronizeFdmButton" Content="Buscar ambas tramas" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="SynchronizeFdm_Click" />
+        <Button x:Name="CancelFdmSyncButton" Content="Cancelar búsqueda FDM" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="CancelFdmSync_Click" />
+        <TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>

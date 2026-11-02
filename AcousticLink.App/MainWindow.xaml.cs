@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private bool captureBusy;
     private bool wasCaptureRecording;
     private bool analyzing;
+    private CancellationTokenSource? fdmSyncCancellation;
     private readonly BfskToneDetector toneDetector = new();
 
     public MainWindow()
@@ -279,6 +280,7 @@ public partial class MainWindow : Window
         SynchronizeButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         AnalyzeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         DecodeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -487,6 +489,52 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { if (!closing) FdmDecodedText.Text = $"No se pudo decodificar FDM: {ex.Message}"; }
         finally { analyzing = false; RefreshCapture(); }
+    }
+
+    private void CancelFdmSync_Click(object sender, RoutedEventArgs e) => fdmSyncCancellation?.Cancel();
+
+    private async void SynchronizeFdm_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        if (!int.TryParse(FdmSyncCountTextBox.Text, out int count) || count < 1 || count > BfskFrameBuilder.MaximumDataBits)
+        {
+            FdmSyncResultText.Text = "Ingresá entre 1 y 16 bits de datos por canal.";
+            return;
+        }
+        analyzing = true;
+        RefreshCapture();
+        FdmSyncResultText.Text = "Buscando cabeceras FDM...";
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
+        fdmSyncCancellation = cancellation;
+        CancelFdmSyncButton.IsEnabled = true;
+        try
+        {
+            var result = await Task.Run(() => new FdmFrameSynchronizer()
+                .Find(recording.GetSamples(), recording.SampleRate, count, cancellation.Token), cancellation.Token);
+            if (closing) return;
+            string Describe(string name, FdmSynchronizedChannel? channel)
+            {
+                if (channel is null) return $"Canal {name}: sin cabecera localizada.";
+                return $"Canal {name} · cabecera {(channel.HeaderValid ? "válida" : "NO válida")}\n" +
+                    $"Preámbulo: {channel.Header.Bits[..BfskFrameBuilder.Preamble.Length]} · marcador: {channel.Header.Bits[BfskFrameBuilder.Preamble.Length..]}\n" +
+                    $"Cabecera: {channel.Header.ConclusiveCount} concluyentes, {channel.Header.InconclusiveCount} no concluyentes\n" +
+                    $"Datos: {channel.Data.Bits} · {channel.Data.ConclusiveCount} concluyentes, {channel.Data.InconclusiveCount} no concluyentes";
+            }
+            string state = result.State switch { FdmSynchronizationState.Complete => "Completa", FdmSynchronizationState.Partial => "Parcial", _ => "Fallida" };
+            FdmSyncResultText.Text = $"Sincronización: {state}\n{result.Reason}\n" +
+                (result.StartSeconds.HasValue ? $"Inicio estimado: {result.StartSeconds:0.000} s · datos: {result.DataStartSeconds:0.000} s\n" : "") +
+                Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+        }
+        catch (OperationCanceledException) { if (!closing) FdmSyncResultText.Text = "Búsqueda FDM cancelada."; }
+        catch (Exception ex) { if (!closing) FdmSyncResultText.Text = $"No se pudo sincronizar FDM: {ex.Message}"; }
+        finally
+        {
+            fdmSyncCancellation = null;
+            CancelFdmSyncButton.IsEnabled = false;
+            analyzing = false;
+            RefreshCapture();
+        }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
