@@ -16,6 +16,9 @@
         <TextBox x:Name="BitSequenceTextBox" Padding="8" Text="10110010" TextChanged="BitSequenceTextBox_TextChanged" />
         <TextBlock x:Name="SequenceInfoText" Margin="0,6,0,10" Text="8 bits · duración estimada: 0,8 s" />
         <Button x:Name="PlaySequenceButton" Content="Reproducir secuencia BFSK" Padding="12" Click="PlaySequence_Click" />
+        <TextBlock Margin="0,16,0,8" FontWeight="SemiBold" Text="Trama de prueba · usa el mismo campo de datos (1–16 bits)" />
+        <TextBlock x:Name="FrameInfoText" TextWrapping="Wrap" />
+        <Button x:Name="PlayFrameButton" Content="Reproducir trama de prueba" Padding="12" Margin="0,8,0,0" Click="PlayFrame_Click" />
 
         <TextBlock x:Name="StatusText" Margin="0,16,0,0" TextWrapping="Wrap" Text="Tonos de prueba: 1 segundo, amplitud 0,15." />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · máximo 10 segundos" />

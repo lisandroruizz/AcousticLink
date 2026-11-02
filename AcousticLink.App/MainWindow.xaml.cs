@@ -8,6 +8,7 @@ namespace AcousticLink.App;
 public partial class MainWindow : Window
 {
     private readonly BfskToneGenerator toneGenerator = new();
+    private readonly BfskFrameBuilder frameBuilder = new();
     private readonly AudioPlaybackService playback = new();
     private readonly CancellationTokenSource windowLifetime = new();
     private readonly AudioCaptureService capture = new();
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        UpdateFramePreview();
         captureTimer.Tick += (_, _) => RefreshCapture();
         captureTimer.Start();
     }
@@ -53,12 +55,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void PlaySequence_Click(object sender, RoutedEventArgs e)
+    private async void PlaySequence_Click(object sender, RoutedEventArgs e) => await PlaySequenceAsync(false);
+
+    private async void PlayFrame_Click(object sender, RoutedEventArgs e) => await PlaySequenceAsync(true);
+
+    private async Task PlaySequenceAsync(bool framed)
     {
         float[] samples;
         try
         {
-            samples = toneGenerator.GenerateSequence(BitSequenceTextBox.Text);
+            string bits = framed ? frameBuilder.Build(BitSequenceTextBox.Text) : BitSequenceTextBox.Text;
+            samples = toneGenerator.GenerateSequence(bits);
         }
         catch (ArgumentException ex)
         {
@@ -67,11 +74,11 @@ public partial class MainWindow : Window
         }
 
         SetPlaybackControls(false);
-        StatusText.Text = "Reproduciendo secuencia BFSK...";
+        StatusText.Text = framed ? "Reproduciendo trama de prueba..." : "Reproduciendo secuencia BFSK...";
         try
         {
             await playback.PlayAsync(samples, BfskToneGenerator.SampleRate, windowLifetime.Token);
-            StatusText.Text = "Reproducción de la secuencia finalizada.";
+            StatusText.Text = framed ? "Reproducción de la trama finalizada." : "Reproducción de la secuencia finalizada.";
         }
         catch (OperationCanceledException) when (windowLifetime.IsCancellationRequested)
         {
@@ -96,6 +103,23 @@ public partial class MainWindow : Window
         SequenceInfoText.Text = bits.Length <= BfskToneGenerator.MaximumSequenceLength
             ? $"{bits.Length} bits · duración estimada: {duration:0.0} s"
             : $"{bits.Length} bits · máximo permitido: {BfskToneGenerator.MaximumSequenceLength}";
+        UpdateFramePreview();
+    }
+
+    private void UpdateFramePreview()
+    {
+        if (FrameInfoText is null) return; // Puede dispararse TextChanged durante InitializeComponent.
+        string patterns = $"Preámbulo (16): {BfskFrameBuilder.Preamble}\nMarcador provisional (8): {BfskFrameBuilder.StartMarker}";
+        try
+        {
+            string data = BitSequenceTextBox.Text;
+            string frame = frameBuilder.Build(data);
+            FrameInfoText.Text = $"{patterns}\nDatos ({data.Length}): {data}\nTotal: {frame.Length} bits · duración estimada: {frame.Length * BfskToneGenerator.DefaultBitDurationSeconds:0.0} s";
+        }
+        catch (ArgumentException ex)
+        {
+            FrameInfoText.Text = $"{patterns}\n{ex.Message}";
+        }
     }
 
     private void SetPlaybackControls(bool enabled)
@@ -104,6 +128,7 @@ public partial class MainWindow : Window
         Bit1Button.IsEnabled = enabled;
         BitSequenceTextBox.IsEnabled = enabled;
         PlaySequenceButton.IsEnabled = enabled;
+        PlayFrameButton.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)
