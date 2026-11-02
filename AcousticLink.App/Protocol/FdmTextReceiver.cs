@@ -12,6 +12,7 @@ public sealed record FdmTextChannelResult(FdmTextReceiveState State, bool Header
     bool? CrcValid, string? Text, BfskSequenceResult? Block, string Reason)
 {
     public bool UsesHamming { get; init; }
+    public bool ErasureRecoveryEnabled { get; init; }
     public Hamming74DecodeResult? HammingDiagnostics { get; init; }
     public bool HammingCoversCompleteBlock { get; init; }
 }
@@ -27,7 +28,7 @@ public sealed class FdmTextReceiver
 
     // Modo explícito acordado con el emisor; no se detecta automáticamente.
     public FdmTextReceiveResult Receive(ReadOnlySpan<float> samples, int sampleRate, CancellationToken token = default,
-        bool useHamming = false)
+        bool useHamming = false, bool recoverErasures = false)
     {
         var sync = synchronizer.FindHeaders(samples, sampleRate, token);
         if (!sync.DataStartSeconds.HasValue)
@@ -35,12 +36,13 @@ public sealed class FdmTextReceiver
             var state = sync.IsAmbiguous ? FdmTextReceiveState.AmbiguousSynchronization
                 : samples.Length / (double)sampleRate < FdmBitstreamGenerator.HeaderBits * FdmSequenceDecoder.SymbolDurationSeconds
                     ? FdmTextReceiveState.Truncated : FdmTextReceiveState.HeaderNotSynchronized;
-            var failed = new FdmTextChannelResult(state, false, null, null, null, null, sync.Reason) { UsesHamming = useHamming };
+            var failed = new FdmTextChannelResult(state, false, null, null, null, null, sync.Reason)
+            { UsesHamming = useHamming, ErasureRecoveryEnabled = useHamming && recoverErasures };
             return new(sync, failed, failed);
         }
-        var a = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token)
+        var a = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token, recoverErasures)
             : ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token);
-        var b = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token)
+        var b = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token, recoverErasures)
             : ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token);
         return new(sync, a, b);
     }
@@ -87,22 +89,26 @@ public sealed class FdmTextReceiver
     }
 
     private FdmTextChannelResult ReadProtectedChannel(ReadOnlySpan<float> samples, int rate, double start,
-        bool headerValid, bool channelA, CancellationToken token)
+        bool headerValid, bool channelA, CancellationToken token, bool recoverErasures)
     {
         token.ThrowIfCancellationRequested();
         Hamming74DecodeResult? diagnostics = null;
+        bool completeBlock = false;
         FdmTextChannelResult Failure(FdmTextReceiveState state, string reason, int? length = null, BfskSequenceResult? block = null) =>
-            new(state, headerValid, length, null, null, block, reason) { UsesHamming = true, HammingDiagnostics = diagnostics };
+            new(state, headerValid, length, null, null, block, reason) { UsesHamming = true, HammingDiagnostics = diagnostics,
+                ErasureRecoveryEnabled = recoverErasures, HammingCoversCompleteBlock = completeBlock };
         if (!headerValid) return Failure(FdmTextReceiveState.HeaderNotSynchronized, "Cabecera del canal no sincronizada.");
         if (!Fits(samples.Length, rate, start, 14))
             return Failure(FdmTextReceiveState.Truncated, "Captura insuficiente para las dos palabras Hamming de longitud.");
         var lengths = decoder.DecodeProtectedMessageBlock(samples, rate, start, 14, token);
         var lengthSymbols = channelA ? lengths.ChannelA : lengths.ChannelB;
-        if (!lengthSymbols.IsComplete)
+        if (!lengthSymbols.IsComplete && !recoverErasures)
             return Failure(FdmTextReceiveState.InconclusiveLength, "Símbolos '?' en la longitud protegida; no se aplica Hamming.", block: lengthSymbols);
         var hamming = new Hamming74Codec();
-        var decodedLength = hamming.Decode(lengthSymbols.Bits);
+        var decodedLength = hamming.Decode(lengthSymbols.Bits, recoverErasures);
         diagnostics = decodedLength;
+        if (!decodedLength.IsComplete)
+            return Failure(FdmTextReceiveState.InconclusiveLength, "Longitud protegida con palabras irrecuperables; CRC no comprobado.", block: lengthSymbols);
         int length = Convert.ToInt32(decodedLength.DataBits, 2);
         if (length < 1 || length > FdmTextFrameBuilder.MaximumUtf8Bytes)
             return Failure(FdmTextReceiveState.InvalidLength, "Longitud decodificada fuera de 1–8 bytes; las inversiones no garantizan su integridad.", length, lengthSymbols);
@@ -112,15 +118,20 @@ public sealed class FdmTextReceiver
             return Failure(FdmTextReceiveState.Truncated, "Captura truncada antes del final del bloque protegido. CRC no comprobado.", length);
         var blocks = decoder.DecodeProtectedMessageBlock(samples, rate, start, protectedBits, token);
         var block = channelA ? blocks.ChannelA : blocks.ChannelB;
-        if (!block.IsComplete)
+        if (!block.IsComplete && !recoverErasures)
             return Failure(FdmTextReceiveState.InconclusiveBits, "Bloque protegido con símbolos '?'; no se inventan bits ni se verifica CRC.", length, block);
-        var decoded = hamming.Decode(block.Bits);
+        var decoded = hamming.Decode(block.Bits, recoverErasures);
+        diagnostics = decoded;
+        completeBlock = true;
+        if (!decoded.IsComplete)
+            return Failure(FdmTextReceiveState.InconclusiveBits, "Palabras Hamming irrecuperables; se conservan '?' y no se comprueba CRC.", length, block);
         // Se reprocesan las mismas muestras. Las dos palabras iniciales se cuentan UNA sola vez.
         if (decoded.DataBits[..8] != decodedLength.DataBits)
             return Failure(FdmTextReceiveState.InvalidLength, "La longitud no coincide entre las dos lecturas.", length, block);
         return ValidateMessage(decoded.DataBits, block, length) with
         {
             UsesHamming = true,
+            ErasureRecoveryEnabled = recoverErasures,
             HammingDiagnostics = decoded,
             HammingCoversCompleteBlock = true
         };

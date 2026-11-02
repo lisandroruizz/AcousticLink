@@ -14,9 +14,13 @@ public sealed record BitComparison(string ExpectedBits, string ObservedBits, int
 
 public sealed record ExperimentHammingStats(IReadOnlyList<Hamming74WordResult> Words, int InconclusiveWords, int IncompleteWords)
 {
-    public int AnalyzedWords => Words.Count;
-    public int NonzeroSyndromes => Words.Count(w => w.Syndrome != 0);
+    public int AnalyzedWords => Words.Count(w => w.IsDecodable);
+    public int NonzeroSyndromes => Words.Count(w => w.HasSyndrome && w.Syndrome != 0);
     public int AppliedBitFlips => Words.Count(w => w.FlippedPosition.HasValue);
+    public int RecoveredErasures => Words.Sum(w => w.RecoveredErasureCount);
+    public int ErasureRecoveredWords => Words.Count(w => w.RecoveredErasureCount > 0);
+    // Palabras completas con borrados que no se pudieron recuperar; las truncadas se cuentan aparte.
+    public int UnrecoverableWords => InconclusiveWords - ErasureRecoveredWords;
 }
 
 public sealed record FdmChannelExperiment(string Channel, string ExpectedMessage, string OriginalReferenceBits,
@@ -29,18 +33,20 @@ public sealed record FdmExperimentResult(DateTimeOffset AnalyzedAt, string Audio
 {
     // Declaración manual del emisor; jamás se infiere del WAV ni se utiliza para decidir bits.
     public FdmAmplitudeProfile? DeclaredAmplitudeProfile { get; init; }
+    public bool ErasureRecoveryEnabled { get; init; }
 }
 
 public sealed class FdmExperimentAnalyzer
 {
     public FdmExperimentResult Analyze(ReadOnlySpan<float> samples, int sampleRate, string expectedA, string expectedB,
         bool useHamming = false, string audioSource = "Sin origen especificado", CancellationToken token = default,
-        FdmAmplitudeProfile? declaredAmplitudeProfile = null)
+        FdmAmplitudeProfile? declaredAmplitudeProfile = null, bool recoverErasures = false)
     {
         if (declaredAmplitudeProfile.HasValue) _ = FdmAmplitudeProfiles.Get(declaredAmplitudeProfile.Value);
         var references = new FdmTextFrameBuilder().Build(expectedA, expectedB, useHamming);
         // El receptor decide sincronización y CRC a partir del audio, nunca de los textos esperados.
-        var reception = new FdmTextReceiver().Receive(samples, sampleRate, token, useHamming);
+        recoverErasures = useHamming && recoverErasures;
+        var reception = new FdmTextReceiver().Receive(samples, sampleRate, token, useHamming, recoverErasures);
         var sync = reception.Synchronization;
         var rawA = new StringBuilder();
         var rawB = new StringBuilder();
@@ -60,14 +66,14 @@ public sealed class FdmExperimentAnalyzer
                 if (i < references.ChannelB.EncodedBlockBitCount) rawB.Append(symbol.ChannelB.Bits);
             }
         }
-        var a = Evaluate("A", expectedA, references.ChannelA, rawA.ToString(), reception.ChannelA, useHamming, token);
-        var b = Evaluate("B", expectedB, references.ChannelB, rawB.ToString(), reception.ChannelB, useHamming, token);
+        var a = Evaluate("A", expectedA, references.ChannelA, rawA.ToString(), reception.ChannelA, useHamming, token, recoverErasures);
+        var b = Evaluate("B", expectedB, references.ChannelB, rawB.ToString(), reception.ChannelB, useHamming, token, recoverErasures);
         return new(DateTimeOffset.UtcNow, audioSource, sampleRate, samples.Length / (double)sampleRate, useHamming, sync, a, b)
-        { DeclaredAmplitudeProfile = declaredAmplitudeProfile };
+        { DeclaredAmplitudeProfile = declaredAmplitudeProfile, ErasureRecoveryEnabled = recoverErasures };
     }
 
     private static FdmChannelExperiment Evaluate(string name, string message, FdmTextChannelFrame reference,
-        string raw, FdmTextChannelResult reception, bool useHamming, CancellationToken token)
+        string raw, FdmTextChannelResult reception, bool useHamming, CancellationToken token, bool recoverErasures)
     {
         if (!reception.HeaderValid)
             return new(name, message, reference.OriginalBlockBits, reference.EncodedBlockBits, null, null, null, reception,
@@ -88,12 +94,14 @@ public sealed class FdmExperimentAnalyzer
             string word = raw.Substring(i * 7, 7);
             if (word.Contains('?'))
             {
-                // No existe una decisión sobre sus cuatro bits originales: mantener sus posiciones.
-                decoded.Append("????");
                 unknownWords++;
-                continue;
+                if (!recoverErasures)
+                {
+                    decoded.Append("????");
+                    continue;
+                }
             }
-            var result = codec.Decode(word);
+            var result = codec.Decode(word, recoverErasures);
             decoded.Append(result.DataBits);
             words.Add(result.Words[0] with { WordIndex = i });
         }
@@ -102,7 +110,8 @@ public sealed class FdmExperimentAnalyzer
         return new(name, message, reference.OriginalBlockBits, reference.EncodedBlockBits, before, after,
             new(words.AsReadOnly(), unknownWords, incompleteWords), reception,
             "BER previa sobre bits codificados; posterior sobre bits originales. Las inversiones son intentos, no correcciones demostradas. " +
-            "Una palabra con '?' deja cuatro bits originales sin comparar; las palabras incompletas figuran como faltantes. " + reception.Reason);
+            "Solo las palabras reconstruidas aportan cobertura posterior; los borrados originales permanecen en la cobertura previa. " +
+            "Las palabras incompletas figuran como faltantes. " + reception.Reason);
     }
 
     public static BitComparison Compare(string expected, string observed)

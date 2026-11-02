@@ -129,6 +129,7 @@
         <TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Receptor" />
         <CheckBox x:Name="UseHammingReceiveCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Margin="0,8,0,8" />
+        <CheckBox x:Name="RecoverReceiveErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,0,0,8" />
         <TextBlock Text="Seleccionar el mismo modo que el emisor. Las inversiones Hamming son intentos; la integridad se comprueba con CRC."
                    TextWrapping="Wrap" Margin="0,0,0,8" />
         <Button x:Name="ReceiveFdmTextButton" Content="Recibir mensajes de la última grabación" IsEnabled="False"
@@ -143,6 +144,7 @@
         <TextBlock Text="Mensaje original esperado B:" Margin="0,8,0,0" />
         <TextBox x:Name="ExperimentExpectedBTextBox" Text="Mundo" Padding="8" />
         <CheckBox x:Name="ExperimentHammingCheckBox" Content="Transmisión con Hamming (7,4)" IsChecked="False" Margin="0,8,0,0" />
+        <CheckBox x:Name="RecoverExperimentErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,8,0,0" />
         <TextBlock Text="Perfil utilizado al transmitir (declaración manual, no medición del receptor):" TextWrapping="Wrap" Margin="0,8,0,0" />
         <ComboBox x:Name="ExperimentProfileComboBox" Margin="0,4,0,0" />
         <Button x:Name="AnalyzeExperimentButton" Content="Medir grabación seleccionada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeExperiment_Click" />

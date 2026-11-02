@@ -21,6 +21,8 @@ public static class FdmExperimentCsv
             header.AddRange(new[] { "esperados", "comparados", "incorrectos", "no_concluyentes", "faltantes", "ber", "cobertura", "observados" }.Select(s => prefix + "_" + s));
         header.AddRange(new[] { "hamming_palabras", "hamming_sindromes_no_nulos", "hamming_inversiones", "hamming_palabras_con_interrogantes",
             "hamming_palabras_incompletas", "hamming_posiciones", "estado_recepcion", "crc", "diagnostico" });
+        // Columnas nuevas al final: se conserva el orden de todas las columnas anteriores.
+        header.AddRange(new[] { "recuperacion_borrados", "borrados_recuperados", "palabras_recuperadas_por_borrados", "palabras_irrecuperables" });
         rows.Add(Line(header));
         foreach (var channel in new[] { result.ChannelA, result.ChannelB })
         {
@@ -41,6 +43,8 @@ public static class FdmExperimentCsv
                 h is null ? "" : string.Join(" | ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}: {w.FlippedPosition}")),
                 channel.Reception.State.ToString(), channel.Reception.CrcValid is true ? "valido" : channel.Reception.CrcValid is false ? "invalido" : "no_comprobado",
                 channel.Diagnostic });
+            fields.AddRange(new[] { result.ErasureRecoveryEnabled ? "si" : "no", h?.RecoveredErasures.ToString(Numbers) ?? "",
+                h?.ErasureRecoveredWords.ToString(Numbers) ?? "", h?.UnrecoverableWords.ToString(Numbers) ?? "" });
             rows.Add(Line(fields));
         }
         return string.Join("\r\n", rows) + "\r\n";

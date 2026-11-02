@@ -1,13 +1,24 @@
 namespace AcousticLink.App.Protocol;
 
 // WordIndex es base cero; Syndrome y FlippedPosition usan posiciones convencionales 1–7.
-public sealed record Hamming74WordResult(int WordIndex, int Syndrome, int? FlippedPosition);
+// Syndrome solo tiene significado si HasSyndrome es true (palabra sin borrados).
+public sealed record Hamming74WordResult(int WordIndex, int Syndrome, int? FlippedPosition)
+{
+    public bool HasSyndrome { get; init; } = true;
+    public int ErasureCount { get; init; }
+    public int RecoveredErasureCount { get; init; }
+    public bool IsDecodable { get; init; } = true;
+}
 
 public sealed record Hamming74DecodeResult(string DataBits, IReadOnlyList<Hamming74WordResult> Words)
 {
     public int WordCount => Words.Count;
     // Síndrome cero NO garantiza ausencia de errores múltiples.
-    public int ZeroSyndromeWordCount => Words.Count(w => w.Syndrome == 0);
+    public int ZeroSyndromeWordCount => Words.Count(w => w.HasSyndrome && w.Syndrome == 0);
+    public bool IsComplete => !DataBits.Contains('?');
+    public int RecoveredErasureCount => Words.Sum(w => w.RecoveredErasureCount);
+    public int ErasureRecoveredWordCount => Words.Count(w => w.RecoveredErasureCount > 0);
+    public int UnrecoverableWordCount => Words.Count(w => !w.IsDecodable);
     public int CorrectedWordCount => Words.Count(w => w.FlippedPosition.HasValue);
     // Inversiones aplicadas, no errores reales demostrados sin una referencia transmitida.
     public int AppliedBitFlipCount => CorrectedWordCount;
@@ -40,15 +51,41 @@ public sealed class Hamming74Codec
         return new string(encoded);
     }
 
-    public Hamming74DecodeResult Decode(string encodedBits)
+    // Con borrados: hasta dos, candidata única y bits conocidos supuestos correctos.
+    // No garantiza corregir errores conocidos mezclados con borrados. El CRC sigue siendo obligatorio.
+    // Sin recuperación se mantiene la validación binaria estricta del códec anterior.
+    public Hamming74DecodeResult Decode(string encodedBits, bool recoverErasures = false)
     {
-        Validate(encodedBits, 7, nameof(encodedBits));
+        Validate(encodedBits, 7, nameof(encodedBits), recoverErasures);
         int wordCount = encodedBits.Length / 7;
         var data = new char[checked(wordCount * 4)];
         var words = new List<Hamming74WordResult>(wordCount);
         Span<int> word = stackalloc int[8]; // Índice cero sin usar para respetar posiciones 1–7.
         for (int index = 0; index < wordCount; index++)
         {
+            string received = encodedBits.Substring(index * 7, 7);
+            int erasures = received.Count(c => c == '?');
+            if (erasures > 0)
+            {
+                // Solo coincidencias exactas con los bits conocidos, que se suponen correctos.
+                // No se combina el borrado con la corrección por síndrome.
+                string? candidate = null;
+                int matches = 0;
+                if (erasures <= 2)
+                    for (int value = 0; value < 16; value++)
+                    {
+                        string information = Convert.ToString(value, 2).PadLeft(4, '0');
+                        string valid = Encode(information);
+                        if (!Enumerable.Range(0, 7).All(p => received[p] == '?' || received[p] == valid[p])) continue;
+                        candidate = information;
+                        matches++;
+                    }
+                bool recovered = matches == 1;
+                (recovered ? candidate! : "????").CopyTo(0, data, index * 4, 4);
+                words.Add(new(index, 0, null) { HasSyndrome = false, ErasureCount = erasures,
+                    RecoveredErasureCount = recovered ? erasures : 0, IsDecodable = recovered });
+                continue;
+            }
             for (int position = 1; position <= 7; position++)
                 word[position] = encodedBits[index * 7 + position - 1] - '0';
             int s1 = word[1] ^ word[3] ^ word[5] ^ word[7];
@@ -67,12 +104,12 @@ public sealed class Hamming74Codec
 
     private static char ToChar(int bit) => (char)('0' + bit);
 
-    private static void Validate(string bits, int groupSize, string parameter)
+    private static void Validate(string bits, int groupSize, string parameter, bool allowErasures = false)
     {
         ArgumentNullException.ThrowIfNull(bits, parameter);
         if (bits.Length == 0 || bits.Length % groupSize != 0)
             throw new ArgumentException($"Se requiere una cadena no vacía de longitud múltiplo de {groupSize}; no se agrega relleno.", parameter);
-        if (bits.Any(c => c != '0' && c != '1'))
-            throw new ArgumentException("Solo se admiten caracteres 0 y 1.", parameter);
+        if (bits.Any(c => c != '0' && c != '1' && !(allowErasures && c == '?')))
+            throw new ArgumentException(allowErasures ? "Solo se admiten caracteres 0, 1 y ?." : "Solo se admiten caracteres 0 y 1.", parameter);
     }
 }

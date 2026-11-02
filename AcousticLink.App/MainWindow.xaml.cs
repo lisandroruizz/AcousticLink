@@ -357,11 +357,13 @@ public partial class MainWindow : Window
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         UseHammingReceiveCheckBox.IsEnabled = !analyzing;
+        RecoverReceiveErasuresCheckBox.IsEnabled = !analyzing && UseHammingReceiveCheckBox.IsChecked == true;
         AnalyzeExperimentButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ExportExperimentButton.IsEnabled = lastExperiment is not null && !analyzing && !capture.IsRecording && !captureBusy;
         ExperimentExpectedATextBox.IsEnabled = !analyzing;
         ExperimentExpectedBTextBox.IsEnabled = !analyzing;
         ExperimentHammingCheckBox.IsEnabled = !analyzing;
+        RecoverExperimentErasuresCheckBox.IsEnabled = !analyzing && ExperimentHammingCheckBox.IsChecked == true;
         ExperimentProfileComboBox.IsEnabled = !analyzing;
         AudioSourceText.Text = audioSelection.Current?.Source ?? "Sin audio seleccionado.";
         CaptureFormatText.Text = audioSelection.Current?.FormatDescription ?? "Sin formato seleccionado.";
@@ -669,9 +671,10 @@ public partial class MainWindow : Window
         CancelReceiveFdmTextButton.IsEnabled = true;
         ReceivedFdmText.Text = "Buscando cabeceras y recuperando mensajes...";
         bool useHamming = UseHammingReceiveCheckBox.IsChecked == true;
+        bool recoverErasures = useHamming && RecoverReceiveErasuresCheckBox.IsChecked == true;
         try
         {
-            var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token, useHamming), cancellation.Token);
+            var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token, useHamming, recoverErasures), cancellation.Token);
             if (closing) return;
             static string Describe(string name, FdmTextChannelResult channel)
             {
@@ -682,7 +685,9 @@ public partial class MainWindow : Window
                     stats = h is null ? "\nHamming: sin palabras decodificadas." :
                         $"\nHamming ({(channel.HammingCoversCompleteBlock ? "bloque completo" : "solo longitud")}): {h.WordCount} palabras · " +
                         $"síndrome cero: {h.ZeroSyndromeWordCount} · no nulo: {h.CorrectedWordCount} · inversiones: {h.AppliedBitFlipCount}\n" +
+                        $"Borrados recuperados: {h.RecoveredErasureCount} · palabras recuperadas por borrados: {h.ErasureRecoveredWordCount} · irrecuperables: {h.UnrecoverableWordCount}\n" +
                         string.Join("; ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}, síndrome {w.Syndrome}, posición invertida {w.FlippedPosition}"));
+                    stats += $"\nRecuperación de borrados: {(channel.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")}. Los bits conocidos se suponen correctos; la integridad final depende del CRC.";
                 }
                 return $"Modo: {(channel.UsesHamming ? "con Hamming (7,4)" : "sin Hamming")}\n" +
                 $"Canal {name} · cabecera: {(channel.HeaderValid ? "validada" : "no validada")} · bytes: {channel.ByteLength?.ToString() ?? "desconocidos"} · " +
@@ -711,6 +716,7 @@ public partial class MainWindow : Window
         if (selected is null || capture.IsRecording || captureBusy || analyzing) return;
         string a = ExperimentExpectedATextBox.Text, b = ExperimentExpectedBTextBox.Text;
         bool hamming = ExperimentHammingCheckBox.IsChecked == true;
+        bool recoverErasures = hamming && RecoverExperimentErasuresCheckBox.IsChecked == true;
         FdmAmplitudeProfile? declaredProfile = (ExperimentProfileComboBox.SelectedItem as FdmAmplitudeSetting)?.Profile;
         lastExperiment = null;
         ExperimentDetailsText.Clear();
@@ -723,7 +729,7 @@ public partial class MainWindow : Window
         try
         {
             var result = await Task.Run(() => new FdmExperimentAnalyzer().Analyze(selected.Audio.GetSamples(), selected.Audio.SampleRate,
-                a, b, hamming, selected.Source, cancellation.Token, declaredProfile), cancellation.Token);
+                a, b, hamming, selected.Source, cancellation.Token, declaredProfile, recoverErasures), cancellation.Token);
             if (closing) return;
             lastExperiment = result;
             static string Describe(string title, BitComparison? comparison) => comparison is null ? $"{title}: no calculable (sin alineación validada)." :
@@ -740,13 +746,15 @@ public partial class MainWindow : Window
                     summary += "\n" + Describe("Después (bits originales)", channel.After);
                     if (channel.Hamming is { } h)
                         summary += $"\nHamming: {h.AnalyzedWords} palabras analizadas, {h.NonzeroSyndromes} síndromes no nulos, " +
-                            $"{h.AppliedBitFlips} inversiones intentadas, {h.InconclusiveWords} palabras con '?', {h.IncompleteWords} incompletas.";
+                            $"{h.AppliedBitFlips} inversiones intentadas, {h.InconclusiveWords} palabras con '?', {h.IncompleteWords} incompletas. " +
+                            $"Borrados recuperados: {h.RecoveredErasures}; palabras recuperadas por borrados: {h.ErasureRecoveredWords}; irrecuperables: {h.UnrecoverableWords}.";
                 }
                 return summary;
             }
             ExperimentSummaryText.Text = $"Origen analizado: {result.AudioSource}\nPerfil declarado por el usuario: " +
                 (result.DeclaredAmplitudeProfile.HasValue ? FdmAmplitudeProfiles.Get(result.DeclaredAmplitudeProfile.Value).Label : "no informado") +
                 $"\n{result.SampleRate} Hz · {result.AudioDurationSeconds:0.000} s · " +
+                (result.UsesHamming ? $"recuperación de borrados {(result.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")} · " : "") +
                 $"sincronización {result.Synchronization.State}\n{ChannelSummary(result.ChannelA)}\n\n{ChannelSummary(result.ChannelB)}";
             ExperimentDetailsText.Text = result.Synchronization.Reason + "\n" + string.Join("\n\n", new[] { result.ChannelA, result.ChannelB }.Select(c =>
                 $"Canal {c.Channel}: {c.Diagnostic}\nReferencia original: {c.OriginalReferenceBits}\nReferencia transmitida: {c.TransmittedReferenceBits}\n" +
