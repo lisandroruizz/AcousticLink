@@ -21,6 +21,20 @@
         <Button x:Name="PlayFrameButton" Content="Reproducir trama de prueba" Padding="12" Margin="0,8,0,0" Click="PlayFrame_Click" />
 
         <TextBlock x:Name="StatusText" Margin="0,16,0,0" TextWrapping="Wrap" Text="Tonos de prueba: 1 segundo, amplitud 0,15." />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Prueba FDM · dos tonos simultáneos · 1 segundo" />
+        <TextBlock Text="Canal A:" />
+        <ComboBox x:Name="FdmBitAComboBox" SelectedIndex="0" Margin="0,4,0,8">
+            <ComboBoxItem Content="Bit 0 · 1200 Hz" />
+            <ComboBoxItem Content="Bit 1 · 1900 Hz" />
+        </ComboBox>
+        <TextBlock Text="Canal B:" />
+        <ComboBox x:Name="FdmBitBComboBox" SelectedIndex="0" Margin="0,4,0,8">
+            <ComboBoxItem Content="Bit 0 · 3000 Hz" />
+            <ComboBoxItem Content="Bit 1 · 3700 Hz" />
+        </ComboBox>
+        <TextBlock Text="Amplitud por tono: 0,075 · límite teórico conjunto: 0,15 · mono, 48 kHz" TextWrapping="Wrap" />
+        <Button x:Name="PlayFdmButton" Content="Reproducir ambos tonos" Padding="12" Margin="0,8,0,0" Click="PlayFdm_Click" />
+        <TextBlock x:Name="FdmStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · máximo 10 segundos" />
         <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
         <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />

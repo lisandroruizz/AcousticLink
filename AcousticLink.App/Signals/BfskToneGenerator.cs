@@ -13,6 +13,14 @@ public sealed class BfskToneGenerator
         double amplitude = DefaultAmplitude)
     {
         double frequency = bit ? Bit1Frequency : Bit0Frequency;
+        return GenerateTone(frequency, durationSeconds, amplitude);
+    }
+
+    // Comparte la misma senoide y envolvente con la prueba de mezcla FDM.
+    internal float[] GenerateTone(double frequency, double durationSeconds, double amplitude)
+    {
+        if (!double.IsFinite(frequency) || frequency <= 0 || frequency >= SampleRate / 2.0)
+            throw new ArgumentOutOfRangeException(nameof(frequency));
         int sampleCount = GetSampleCount(durationSeconds);
         return GenerateWaveform([frequency], sampleCount, amplitude);
     }

@@ -8,6 +8,7 @@ namespace AcousticLink.App;
 public partial class MainWindow : Window
 {
     private readonly BfskToneGenerator toneGenerator = new();
+    private readonly FdmToneMixer fdmMixer = new();
     private readonly BfskFrameBuilder frameBuilder = new();
     private readonly AudioPlaybackService playback = new();
     private readonly CancellationTokenSource windowLifetime = new();
@@ -94,6 +95,27 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void PlayFdm_Click(object sender, RoutedEventArgs e)
+    {
+        bool bitA = FdmBitAComboBox.SelectedIndex == 1;
+        bool bitB = FdmBitBComboBox.SelectedIndex == 1;
+        SetPlaybackControls(false);
+        FdmStatusText.Text = $"Reproduciendo FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)}...";
+        try
+        {
+            float[] samples = fdmMixer.Generate(bitA, bitB);
+            await playback.PlayAsync(samples, FdmToneMixer.SampleRate, windowLifetime.Token);
+            FdmStatusText.Text = "Reproducción FDM finalizada.";
+        }
+        catch (OperationCanceledException) when (windowLifetime.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            FdmStatusText.Text = "No se pudo reproducir la prueba FDM.";
+            ShowPlaybackError(ex);
+        }
+        finally { SetPlaybackControls(true); }
+    }
+
     private void BitSequenceTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (SequenceInfoText is null)
@@ -129,6 +151,9 @@ public partial class MainWindow : Window
         BitSequenceTextBox.IsEnabled = enabled;
         PlaySequenceButton.IsEnabled = enabled;
         PlayFrameButton.IsEnabled = enabled;
+        FdmBitAComboBox.IsEnabled = enabled;
+        FdmBitBComboBox.IsEnabled = enabled;
+        PlayFdmButton.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)
