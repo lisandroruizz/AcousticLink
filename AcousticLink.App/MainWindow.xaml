@@ -35,6 +35,15 @@
         <TextBlock Text="Amplitud por tono: 0,075 · límite teórico conjunto: 0,15 · mono, 48 kHz" TextWrapping="Wrap" />
         <Button x:Name="PlayFdmButton" Content="Reproducir ambos tonos" Padding="12" Margin="0,8,0,0" Click="PlayFdm_Click" />
         <TextBlock x:Name="FdmStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Secuencias FDM simultáneas · igual longitud (1–16 bits)" />
+        <TextBlock Text="Bits del canal A:" />
+        <TextBox x:Name="FdmSequenceATextBox" Text="10110010" Padding="8" TextChanged="FdmSequences_TextChanged" />
+        <TextBlock Text="Bits del canal B:" Margin="0,8,0,0" />
+        <TextBox x:Name="FdmSequenceBTextBox" Text="01001101" Padding="8" TextChanged="FdmSequences_TextChanged" />
+        <TextBlock x:Name="FdmSequencesInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Button x:Name="PlayFdmSequencesButton" Content="Reproducir ambas secuencias" Padding="12"
+                Margin="0,8,0,0" Click="PlayFdmSequences_Click" />
+        <TextBlock x:Name="FdmSequencesStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · máximo 10 segundos" />
         <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
         <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />

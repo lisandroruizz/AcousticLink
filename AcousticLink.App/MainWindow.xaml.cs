@@ -9,6 +9,7 @@ public partial class MainWindow : Window
 {
     private readonly BfskToneGenerator toneGenerator = new();
     private readonly FdmToneMixer fdmMixer = new();
+    private readonly FdmBitstreamGenerator fdmBitstreamGenerator = new();
     private readonly BfskFrameBuilder frameBuilder = new();
     private readonly AudioPlaybackService playback = new();
     private readonly CancellationTokenSource windowLifetime = new();
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         UpdateFramePreview();
+        UpdateFdmSequencesInfo();
         captureTimer.Tick += (_, _) => RefreshCapture();
         captureTimer.Start();
     }
@@ -116,6 +118,44 @@ public partial class MainWindow : Window
         finally { SetPlaybackControls(true); }
     }
 
+    private void FdmSequences_TextChanged(object sender, TextChangedEventArgs e) => UpdateFdmSequencesInfo();
+
+    private void UpdateFdmSequencesInfo()
+    {
+        if (FdmSequencesInfoText is null) return;
+        try
+        {
+            FdmBitstreamGenerator.ValidateSequences(FdmSequenceATextBox.Text, FdmSequenceBTextBox.Text);
+            FdmSequencesInfoText.Text = $"{FdmSequenceATextBox.Text.Length} bits por canal · duración estimada: " +
+                $"{FdmSequenceATextBox.Text.Length * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s";
+        }
+        catch (ArgumentException ex) { FdmSequencesInfoText.Text = ex.Message; }
+    }
+
+    private async void PlayFdmSequences_Click(object sender, RoutedEventArgs e)
+    {
+        string a = FdmSequenceATextBox.Text;
+        string b = FdmSequenceBTextBox.Text;
+        try { FdmBitstreamGenerator.ValidateSequences(a, b); }
+        catch (ArgumentException ex) { FdmSequencesStatusText.Text = ex.Message; return; }
+        SetPlaybackControls(false);
+        FdmSequencesStatusText.Text = "Reproduciendo secuencias FDM...";
+        CancellationToken token = windowLifetime.Token;
+        try
+        {
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.Generate(a, b), token);
+            await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
+            FdmSequencesStatusText.Text = "Reproducción de ambas secuencias finalizada.";
+        }
+        catch (OperationCanceledException) when (closing) { }
+        catch (Exception ex)
+        {
+            FdmSequencesStatusText.Text = "No se pudieron reproducir las secuencias FDM.";
+            ShowPlaybackError(ex);
+        }
+        finally { SetPlaybackControls(true); }
+    }
+
     private void BitSequenceTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (SequenceInfoText is null)
@@ -154,6 +194,9 @@ public partial class MainWindow : Window
         FdmBitAComboBox.IsEnabled = enabled;
         FdmBitBComboBox.IsEnabled = enabled;
         PlayFdmButton.IsEnabled = enabled;
+        FdmSequenceATextBox.IsEnabled = enabled;
+        FdmSequenceBTextBox.IsEnabled = enabled;
+        PlayFdmSequencesButton.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)

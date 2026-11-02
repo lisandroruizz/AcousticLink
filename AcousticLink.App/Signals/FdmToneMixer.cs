@@ -21,6 +21,12 @@ public sealed class FdmToneMixer
         float[] b = generator.GenerateTone(frequencyB, durationSeconds, amplitude / 2);
         // Ambas senoides usan las mismas rampas de 5 ms, en los extremos del bloque.
         // e[n] * (A/2*sin(faseA[n]) + A/2*sin(faseB[n])); no se recorta ni normaliza.
+        return MixInPlace(a, b);
+    }
+
+    internal static float[] MixInPlace(float[] a, float[] b)
+    {
+        if (a.Length != b.Length) throw new ArgumentException("Los canales deben tener igual cantidad de muestras.");
         for (int i = 0; i < a.Length; i++) a[i] += b[i];
         return a;
     }

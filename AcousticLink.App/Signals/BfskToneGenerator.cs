@@ -27,6 +27,11 @@ public sealed class BfskToneGenerator
 
     public float[] GenerateSequence(string bits, double bitDurationSeconds = DefaultBitDurationSeconds,
         double amplitude = DefaultAmplitude)
+        => GenerateSequence(bits, Bit0Frequency, Bit1Frequency, bitDurationSeconds, amplitude);
+
+    // La misma generación con fase continua para las bandas A/B; API pública BFSK intacta.
+    internal float[] GenerateSequence(string bits, double frequency0, double frequency1,
+        double bitDurationSeconds, double amplitude)
     {
         ArgumentNullException.ThrowIfNull(bits);
         if (bits.Length == 0)
@@ -39,8 +44,8 @@ public sealed class BfskToneGenerator
         {
             frequencies[i] = bits[i] switch
             {
-                '0' => Bit0Frequency,
-                '1' => Bit1Frequency,
+                '0' => frequency0,
+                '1' => frequency1,
                 _ => throw new ArgumentException("La secuencia solo puede contener caracteres 0 y 1.", nameof(bits))
             };
         }
