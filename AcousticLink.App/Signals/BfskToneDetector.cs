@@ -41,8 +41,8 @@ public sealed class BfskToneDetector
         foreach (float value in samples) power += (value - mean) * (value - mean);
         power /= samples.Length;
 
-        double energy0 = Goertzel(samples, mean, sampleRate, BfskToneGenerator.Bit0Frequency);
-        double energy1 = Goertzel(samples, mean, sampleRate, BfskToneGenerator.Bit1Frequency);
+        double energy0 = GoertzelEnergy.Estimate(samples, mean, sampleRate, BfskToneGenerator.Bit0Frequency);
+        double energy1 = GoertzelEnergy.Estimate(samples, mean, sampleRate, BfskToneGenerator.Bit1Frequency);
         if (Math.Sqrt(power) < MinimumRms)
             return new(energy0, energy1, null, "Señal demasiado débil o silencio.");
         double strongest = Math.Max(energy0, energy1);
@@ -54,19 +54,4 @@ public sealed class BfskToneDetector
         return new(energy0, energy1, energy0 > energy1 ? 0 : 1, "Tono BFSK identificado.");
     }
 
-    private static double Goertzel(ReadOnlySpan<float> samples, double mean, int sampleRate, double frequency)
-    {
-        // Frecuencia nominal exacta, sin redondearla a un bin de FFT.
-        double coefficient = 2 * Math.Cos(2 * Math.PI * frequency / sampleRate);
-        double previous = 0, previous2 = 0;
-        foreach (float sample in samples)
-        {
-            double current = sample - mean + coefficient * previous - previous2;
-            previous2 = previous;
-            previous = current;
-        }
-        double magnitudeSquared = Math.Max(0, previous * previous + previous2 * previous2 - coefficient * previous * previous2);
-        // Potencia media estimada: un seno de amplitud A produce aproximadamente A²/2.
-        return 2 * magnitudeSquared / ((double)samples.Length * samples.Length);
-    }
 }

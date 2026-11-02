@@ -196,6 +196,7 @@ public partial class MainWindow : Window
         AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         DecodeSequenceButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         SynchronizeButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        AnalyzeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -328,6 +329,40 @@ public partial class MainWindow : Window
         {
             if (!closing) SynchronizationText.Text = $"No se pudo sincronizar: {ex.Message}";
         }
+        finally { analyzing = false; RefreshCapture(); }
+    }
+
+    private async void AnalyzeFdm_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        if (!double.TryParse(FdmAnalysisStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0)
+        {
+            FdmDetectionText.Text = "Ingresá un instante inicial finito no negativo.";
+            return;
+        }
+        double startSample = Math.Round(start * recording.SampleRate);
+        int length = (int)Math.Round(0.10 * recording.SampleRate);
+        if (startSample > recording.GetStatus().Count - length)
+        {
+            FdmDetectionText.Text = "La ventana completa debe estar dentro de la grabación.";
+            return;
+        }
+        analyzing = true;
+        RefreshCapture();
+        FdmDetectionText.Text = "Analizando FDM...";
+        try
+        {
+            var result = await Task.Run(() => new FdmToneDetector().Analyze(
+                recording.GetSamples().AsSpan((int)startSample, length), recording.SampleRate));
+            if (closing) return;
+            static string Describe(BfskDetectionResult channel) => channel.Bit is int bit
+                ? $"bit {bit}" : $"no concluyente: {channel.Reason}";
+            FdmDetectionText.Text = $"{recording.SampleRate} Hz · ventana de 0,10 s\n" +
+                $"Canal A: {Describe(result.ChannelA)}\nE1200={result.ChannelA.Energy0:G6} · E1900={result.ChannelA.Energy1:G6}\n" +
+                $"Canal B: {Describe(result.ChannelB)}\nE3000={result.ChannelB.Energy0:G6} · E3700={result.ChannelB.Energy1:G6}";
+        }
+        catch (Exception ex) { if (!closing) FdmDetectionText.Text = $"No se pudo analizar FDM: {ex.Message}"; }
         finally { analyzing = false; RefreshCapture(); }
     }
 

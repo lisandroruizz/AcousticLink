@@ -64,6 +64,12 @@
         <Button x:Name="SynchronizeButton" Content="Buscar y decodificar trama" IsEnabled="False"
                 Padding="8" Margin="0,8,0,0" Click="Synchronize_Click" />
         <TextBlock x:Name="SynchronizationText" Text="Sin búsqueda." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Detección FDM" />
+        <TextBlock Text="Inicio de la ventana de 0,10 s (segundos):" />
+        <TextBox x:Name="FdmAnalysisStartTextBox" Text="0" Padding="8" />
+        <Button x:Name="AnalyzeFdmButton" Content="Analizar ambos canales" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="AnalyzeFdm_Click" />
+        <TextBlock x:Name="FdmDetectionText" Text="Sin análisis FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>
