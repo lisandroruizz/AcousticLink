@@ -31,11 +31,11 @@ public sealed class FdmBitstreamGenerator
         return GenerateCore(frames.ChannelA, frames.ChannelB);
     }
 
-    public float[] GenerateTextFrames(string textA, string textB)
+    public float[] GenerateTextFrames(string textA, string textB, bool useHamming = false)
     {
-        var frames = new FdmTextFrameBuilder().Build(textA, textB);
+        var frames = new FdmTextFrameBuilder().Build(textA, textB, useHamming);
         return GenerateCore(frames.ChannelA.TransmittedBits, frames.ChannelB.TransmittedBits,
-            FdmTextFrameBuilder.MaximumFrameBits);
+            useHamming ? FdmTextFrameBuilder.MaximumProtectedFrameBits : FdmTextFrameBuilder.MaximumFrameBits);
     }
 
     private float[] GenerateCore(string bitsA, string bitsB, int maximumBits = BfskToneGenerator.MaximumSequenceLength)

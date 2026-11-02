@@ -196,15 +196,19 @@ public partial class MainWindow : Window
     }
 
     private void FdmText_TextChanged(object sender, TextChangedEventArgs e) => UpdateFdmTextInfo();
+    private void HammingTransmit_Changed(object sender, RoutedEventArgs e) => UpdateFdmTextInfo();
 
     private void UpdateFdmTextInfo()
     {
         if (FdmTextInfoText is null) return;
         try
         {
-            var frames = new FdmTextFrameBuilder().Build(FdmTextATextBox.Text, FdmTextBTextBox.Text);
-            FdmTextInfoText.Text = $"A: {frames.ChannelA.Utf8ByteCount} bytes UTF-8 · {frames.ChannelA.RealBitCount} bits reales · {frames.ChannelA.PaddingBitCount} bits de relleno\n" +
-                $"B: {frames.ChannelB.Utf8ByteCount} bytes UTF-8 · {frames.ChannelB.RealBitCount} bits reales · {frames.ChannelB.PaddingBitCount} bits de relleno\n" +
+            var frames = new FdmTextFrameBuilder().Build(FdmTextATextBox.Text, FdmTextBTextBox.Text, UseHammingTransmitCheckBox.IsChecked == true);
+            static string Describe(string name, FdmTextChannelFrame channel) =>
+                $"{name}: {channel.Utf8ByteCount} bytes UTF-8 · bloque original: {channel.OriginalBlockBitCount} bits · " +
+                (channel.UsesHamming ? $"bloque Hamming: {channel.EncodedBlockBitCount} bits · " : "sin Hamming · ") +
+                $"cabecera: {channel.HeaderBitCount} bits · trama real: {channel.RealBitCount} bits · relleno: {channel.PaddingBitCount} bits\n";
+            FdmTextInfoText.Text = Describe("A", frames.ChannelA) + Describe("B", frames.ChannelB) +
                 $"Total: {frames.TotalSymbols} símbolos · duración conjunta: {frames.TotalSymbols * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s";
         }
         catch (ArgumentException ex) { FdmTextInfoText.Text = ex.Message; }
@@ -213,14 +217,15 @@ public partial class MainWindow : Window
     private async void TransmitFdmText_Click(object sender, RoutedEventArgs e)
     {
         string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text;
-        try { _ = new FdmTextFrameBuilder().Build(a, b); }
+        bool useHamming = UseHammingTransmitCheckBox.IsChecked == true;
+        try { _ = new FdmTextFrameBuilder().Build(a, b, useHamming); }
         catch (ArgumentException ex) { FdmTextStatusText.Text = ex.Message; return; }
         SetPlaybackControls(false);
-        FdmTextStatusText.Text = "Transmitiendo ambos mensajes...";
+        FdmTextStatusText.Text = useHamming ? "Transmitiendo mensajes con Hamming (7,4)..." : "Transmitiendo mensajes sin Hamming...";
         CancellationToken token = windowLifetime.Token;
         try
         {
-            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b), token);
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, useHamming), token);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmTextStatusText.Text = "Reproducción de mensajes finalizada (recepción aún no verificada).";
         }
@@ -276,6 +281,7 @@ public partial class MainWindow : Window
         FdmTextATextBox.IsEnabled = enabled;
         FdmTextBTextBox.IsEnabled = enabled;
         TransmitFdmTextButton.IsEnabled = enabled;
+        UseHammingTransmitCheckBox.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)

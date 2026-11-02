@@ -57,6 +57,10 @@
         <TextBox x:Name="FdmTextATextBox" Text="Hola" Padding="8" TextChanged="FdmText_TextChanged" />
         <TextBlock Text="Texto B (1–8 bytes UTF-8):" Margin="0,8,0,0" />
         <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Padding="8" TextChanged="FdmText_TextChanged" />
+        <CheckBox x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False"
+                  Margin="0,8,0,0" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed" />
+        <TextBlock Text="Modo experimental: el receptor deberá usar el mismo modo. El receptor actual solo admite mensajes sin Hamming."
+                   TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <Button x:Name="TransmitFdmTextButton" Content="Transmitir ambos mensajes" Padding="12" Margin="0,8,0,0" Click="TransmitFdmText_Click" />
         <TextBlock x:Name="FdmTextStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
