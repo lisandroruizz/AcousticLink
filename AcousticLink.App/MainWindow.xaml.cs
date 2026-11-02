@@ -170,6 +170,7 @@ public partial class MainWindow : Window
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
         AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         DecodeSequenceButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        SynchronizeButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -272,6 +273,37 @@ public partial class MainWindow : Window
             analyzing = false;
             RefreshCapture();
         }
+    }
+
+    private async void Synchronize_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        if (!int.TryParse(SyncBitCountTextBox.Text, out int count) || count < 1 || count > BfskFrameBuilder.MaximumDataBits)
+        {
+            SynchronizationText.Text = "Ingresá entre 1 y 16 bits de datos.";
+            return;
+        }
+        analyzing = true;
+        RefreshCapture();
+        SynchronizationText.Text = "Buscando trama...";
+        CancellationToken token = windowLifetime.Token;
+        try
+        {
+            var result = await Task.Run(() => new BfskFrameSynchronizer(toneDetector)
+                .Find(recording.GetSamples(), recording.SampleRate, count, token), token);
+            if (closing) return;
+            SynchronizationText.Text = result.Found
+                ? $"Inicio estimado: {result.StartSeconds:0.000} s · datos desde: {result.DataStartSeconds:0.000} s\n" +
+                  $"Preámbulo: {result.Preamble}\nMarcador: {result.Marker}\nDatos: {result.Data!.Bits}\n{result.Reason}"
+                : $"No se encontró una trama válida: {result.Reason}";
+        }
+        catch (OperationCanceledException) when (closing) { }
+        catch (Exception ex)
+        {
+            if (!closing) SynchronizationText.Text = $"No se pudo sincronizar: {ex.Message}";
+        }
+        finally { analyzing = false; RefreshCapture(); }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

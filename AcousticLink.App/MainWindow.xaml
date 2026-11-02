@@ -44,6 +44,12 @@
         <TextBlock x:Name="DecodedSequenceText" Text="Sin decodificación." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBox x:Name="SequenceDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
                  MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática" />
+        <TextBlock Text="Cantidad esperada de bits de datos (1–16):" />
+        <TextBox x:Name="SyncBitCountTextBox" Text="8" Padding="8" />
+        <Button x:Name="SynchronizeButton" Content="Buscar y decodificar trama" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="Synchronize_Click" />
+        <TextBlock x:Name="SynchronizationText" Text="Sin búsqueda." TextWrapping="Wrap" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>
