@@ -16,6 +16,8 @@ public partial class MainWindow : Window
     private bool closeReady;
     private bool captureBusy;
     private bool wasCaptureRecording;
+    private bool analyzing;
+    private readonly BfskToneDetector toneDetector = new();
 
     public MainWindow()
     {
@@ -141,6 +143,7 @@ public partial class MainWindow : Window
         var recording = capture.Recording;
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
+        AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -162,6 +165,49 @@ public partial class MainWindow : Window
             CaptureStatusText.Text = $"WAV guardado: {dialog.FileName}";
         }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo guardar WAV: {ex.Message}"; }
+    }
+
+    private async void AnalyzeTone_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        if (!double.TryParse(AnalysisStartTextBox.Text, out double startSeconds) ||
+            !double.IsFinite(startSeconds) || startSeconds < 0)
+        {
+            AnalysisResultText.Text = "Ingresá un instante inicial válido, mayor o igual a cero.";
+            return;
+        }
+        double startSample = Math.Round(startSeconds * recording.SampleRate);
+        int length = (int)Math.Round(0.10 * recording.SampleRate);
+        int count = recording.GetStatus().Count;
+        if (startSample > count || length > count - startSample)
+        {
+            AnalysisResultText.Text = "La ventana completa de 0,10 s debe estar dentro de la grabación.";
+            return;
+        }
+        analyzing = true;
+        AnalyzeToneButton.IsEnabled = false;
+        AnalysisResultText.Text = "Analizando...";
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                float[] samples = recording.GetSamples();
+                return toneDetector.Analyze(samples.AsSpan((int)startSample, length), recording.SampleRate);
+            });
+            if (!closing)
+                AnalysisResultText.Text = $"{recording.SampleRate} Hz · energía 1200 Hz: {result.Energy0:G6} · energía 1900 Hz: {result.Energy1:G6}\n" +
+                    (result.Bit is int bit ? $"Bit detectado: {bit}." : $"No concluyente: {result.Reason}");
+        }
+        catch (Exception ex)
+        {
+            if (!closing) AnalysisResultText.Text = $"No se pudo analizar: {ex.Message}";
+        }
+        finally
+        {
+            analyzing = false;
+            RefreshCapture();
+        }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
