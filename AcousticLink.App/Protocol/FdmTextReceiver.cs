@@ -9,7 +9,12 @@ public enum FdmTextReceiveState
 }
 
 public sealed record FdmTextChannelResult(FdmTextReceiveState State, bool HeaderValid, int? ByteLength,
-    bool? CrcValid, string? Text, BfskSequenceResult? Block, string Reason);
+    bool? CrcValid, string? Text, BfskSequenceResult? Block, string Reason)
+{
+    public bool UsesHamming { get; init; }
+    public Hamming74DecodeResult? HammingDiagnostics { get; init; }
+    public bool HammingCoversCompleteBlock { get; init; }
+}
 
 public sealed record FdmTextReceiveResult(FdmSynchronizationResult Synchronization,
     FdmTextChannelResult ChannelA, FdmTextChannelResult ChannelB);
@@ -20,7 +25,9 @@ public sealed class FdmTextReceiver
     private readonly FdmSequenceDecoder decoder = new();
     private readonly MessageCodec codec = new();
 
-    public FdmTextReceiveResult Receive(ReadOnlySpan<float> samples, int sampleRate, CancellationToken token = default)
+    // Modo explícito acordado con el emisor; no se detecta automáticamente.
+    public FdmTextReceiveResult Receive(ReadOnlySpan<float> samples, int sampleRate, CancellationToken token = default,
+        bool useHamming = false)
     {
         var sync = synchronizer.FindHeaders(samples, sampleRate, token);
         if (!sync.DataStartSeconds.HasValue)
@@ -28,11 +35,13 @@ public sealed class FdmTextReceiver
             var state = sync.IsAmbiguous ? FdmTextReceiveState.AmbiguousSynchronization
                 : samples.Length / (double)sampleRate < FdmBitstreamGenerator.HeaderBits * FdmSequenceDecoder.SymbolDurationSeconds
                     ? FdmTextReceiveState.Truncated : FdmTextReceiveState.HeaderNotSynchronized;
-            var failed = new FdmTextChannelResult(state, false, null, null, null, null, sync.Reason);
+            var failed = new FdmTextChannelResult(state, false, null, null, null, null, sync.Reason) { UsesHamming = useHamming };
             return new(sync, failed, failed);
         }
-        var a = ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token);
-        var b = ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token);
+        var a = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token)
+            : ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelA!.HeaderValid, true, token);
+        var b = useHamming ? ReadProtectedChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token)
+            : ReadChannel(samples, sampleRate, sync.DataStartSeconds.Value, sync.ChannelB!.HeaderValid, false, token);
         return new(sync, a, b);
     }
 
@@ -57,9 +66,14 @@ public sealed class FdmTextReceiver
         var block = channelA ? blocks.ChannelA : blocks.ChannelB;
         if (!block.IsComplete)
             return new(FdmTextReceiveState.InconclusiveBits, true, length, null, null, block, "Bloque con bits '?' no concluyentes; CRC no comprobado.");
+        return ValidateMessage(block.Bits, block, length);
+    }
+
+    private FdmTextChannelResult ValidateMessage(string bits, BfskSequenceResult block, int length)
+    {
         try
         {
-            string text = codec.Decode(block.Bits);
+            string text = codec.Decode(bits);
             return new(FdmTextReceiveState.Valid, true, length, true, text, block, "Mensaje recibido con CRC válido y UTF-8 estricto.");
         }
         catch (FormatException ex) when (ex.InnerException is System.Text.DecoderFallbackException)
@@ -70,6 +84,46 @@ public sealed class FdmTextReceiver
         {
             return new(FdmTextReceiveState.CrcIncorrect, true, length, false, null, block, ex.Message);
         }
+    }
+
+    private FdmTextChannelResult ReadProtectedChannel(ReadOnlySpan<float> samples, int rate, double start,
+        bool headerValid, bool channelA, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        Hamming74DecodeResult? diagnostics = null;
+        FdmTextChannelResult Failure(FdmTextReceiveState state, string reason, int? length = null, BfskSequenceResult? block = null) =>
+            new(state, headerValid, length, null, null, block, reason) { UsesHamming = true, HammingDiagnostics = diagnostics };
+        if (!headerValid) return Failure(FdmTextReceiveState.HeaderNotSynchronized, "Cabecera del canal no sincronizada.");
+        if (!Fits(samples.Length, rate, start, 14))
+            return Failure(FdmTextReceiveState.Truncated, "Captura insuficiente para las dos palabras Hamming de longitud.");
+        var lengths = decoder.DecodeProtectedMessageBlock(samples, rate, start, 14, token);
+        var lengthSymbols = channelA ? lengths.ChannelA : lengths.ChannelB;
+        if (!lengthSymbols.IsComplete)
+            return Failure(FdmTextReceiveState.InconclusiveLength, "Símbolos '?' en la longitud protegida; no se aplica Hamming.", block: lengthSymbols);
+        var hamming = new Hamming74Codec();
+        var decodedLength = hamming.Decode(lengthSymbols.Bits);
+        diagnostics = decodedLength;
+        int length = Convert.ToInt32(decodedLength.DataBits, 2);
+        if (length < 1 || length > FdmTextFrameBuilder.MaximumUtf8Bytes)
+            return Failure(FdmTextReceiveState.InvalidLength, "Longitud decodificada fuera de 1–8 bytes; las inversiones no garantizan su integridad.", length, lengthSymbols);
+        int originalBits = 8 + length * 8 + MessageCodec.CrcBytes * 8;
+        int protectedBits = originalBits / 4 * 7;
+        if (!Fits(samples.Length, rate, start, protectedBits))
+            return Failure(FdmTextReceiveState.Truncated, "Captura truncada antes del final del bloque protegido. CRC no comprobado.", length);
+        var blocks = decoder.DecodeProtectedMessageBlock(samples, rate, start, protectedBits, token);
+        var block = channelA ? blocks.ChannelA : blocks.ChannelB;
+        if (!block.IsComplete)
+            return Failure(FdmTextReceiveState.InconclusiveBits, "Bloque protegido con símbolos '?'; no se inventan bits ni se verifica CRC.", length, block);
+        var decoded = hamming.Decode(block.Bits);
+        // Se reprocesan las mismas muestras. Las dos palabras iniciales se cuentan UNA sola vez.
+        if (decoded.DataBits[..8] != decodedLength.DataBits)
+            return Failure(FdmTextReceiveState.InvalidLength, "La longitud no coincide entre las dos lecturas.", length, block);
+        return ValidateMessage(decoded.DataBits, block, length) with
+        {
+            UsesHamming = true,
+            HammingDiagnostics = decoded,
+            HammingCoversCompleteBlock = true
+        };
     }
 
     private static bool Fits(int count, int rate, double start, int symbols) =>

@@ -43,6 +43,15 @@ public sealed class FdmSequenceDecoder
         return DecodeCore(samples, sampleRate, startSeconds, symbolCount, cancellationToken);
     }
 
+    public FdmSequenceResult DecodeProtectedMessageBlock(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int symbolCount, CancellationToken cancellationToken = default)
+    {
+        int maximum = Protocol.FdmTextFrameBuilder.MaximumProtectedFrameBits - FdmBitstreamGenerator.HeaderBits;
+        if (symbolCount < 14 || symbolCount > maximum || symbolCount % 7 != 0)
+            throw new ArgumentOutOfRangeException(nameof(symbolCount));
+        return DecodeCore(samples, sampleRate, startSeconds, symbolCount, cancellationToken);
+    }
+
     private FdmSequenceResult DecodeCore(ReadOnlySpan<float> samples, int sampleRate,
         double startSeconds, int symbolCount, CancellationToken cancellationToken = default)
     {

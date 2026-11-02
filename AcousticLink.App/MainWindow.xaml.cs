@@ -333,6 +333,7 @@ public partial class MainWindow : Window
         DecodeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        UseHammingReceiveCheckBox.IsEnabled = !analyzing;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
         {
@@ -612,14 +613,27 @@ public partial class MainWindow : Window
         textReceiveCancellation = cancellation;
         CancelReceiveFdmTextButton.IsEnabled = true;
         ReceivedFdmText.Text = "Buscando cabeceras y recuperando mensajes...";
+        bool useHamming = UseHammingReceiveCheckBox.IsChecked == true;
         try
         {
-            var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token), cancellation.Token);
+            var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token, useHamming), cancellation.Token);
             if (closing) return;
-            static string Describe(string name, FdmTextChannelResult channel) =>
+            static string Describe(string name, FdmTextChannelResult channel)
+            {
+                string stats = "";
+                if (channel.UsesHamming)
+                {
+                    var h = channel.HammingDiagnostics;
+                    stats = h is null ? "\nHamming: sin palabras decodificadas." :
+                        $"\nHamming ({(channel.HammingCoversCompleteBlock ? "bloque completo" : "solo longitud")}): {h.WordCount} palabras · " +
+                        $"síndrome cero: {h.ZeroSyndromeWordCount} · no nulo: {h.CorrectedWordCount} · inversiones: {h.AppliedBitFlipCount}\n" +
+                        string.Join("; ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}, síndrome {w.Syndrome}, posición invertida {w.FlippedPosition}"));
+                }
+                return $"Modo: {(channel.UsesHamming ? "con Hamming (7,4)" : "sin Hamming")}\n" +
                 $"Canal {name} · cabecera: {(channel.HeaderValid ? "validada" : "no validada")} · bytes: {channel.ByteLength?.ToString() ?? "desconocidos"} · " +
                 $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")}\n" +
-                (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason;
+                (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason + stats;
+            }
             ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
                 result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
         }

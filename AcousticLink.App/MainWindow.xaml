@@ -59,7 +59,7 @@
         <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Padding="8" TextChanged="FdmText_TextChanged" />
         <CheckBox x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False"
                   Margin="0,8,0,0" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed" />
-        <TextBlock Text="Modo experimental: el receptor deberá usar el mismo modo. El receptor actual solo admite mensajes sin Hamming."
+        <TextBlock Text="Modo experimental: seleccionar la misma modalidad Hamming en el emisor y el receptor."
                    TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <Button x:Name="TransmitFdmTextButton" Content="Transmitir ambos mensajes" Padding="12" Margin="0,8,0,0" Click="TransmitFdmText_Click" />
@@ -124,6 +124,9 @@
                 Padding="8" Margin="0,8,0,0" Click="CancelFdmSync_Click" />
         <TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Receptor" />
+        <CheckBox x:Name="UseHammingReceiveCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Margin="0,8,0,8" />
+        <TextBlock Text="Seleccionar el mismo modo que el emisor. Las inversiones Hamming son intentos; la integridad se comprueba con CRC."
+                   TextWrapping="Wrap" Margin="0,0,0,8" />
         <Button x:Name="ReceiveFdmTextButton" Content="Recibir mensajes de la última grabación" IsEnabled="False"
                 Padding="8" Click="ReceiveFdmText_Click" />
         <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar recepción" IsEnabled="False" Padding="8"
