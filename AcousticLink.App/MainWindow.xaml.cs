@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private bool wasCaptureRecording;
     private bool analyzing;
     private CancellationTokenSource? fdmSyncCancellation;
+    private CancellationTokenSource? textReceiveCancellation;
     private readonly BfskToneDetector toneDetector = new();
 
     public MainWindow()
@@ -325,6 +326,7 @@ public partial class MainWindow : Window
         AnalyzeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         DecodeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
         {
@@ -587,6 +589,40 @@ public partial class MainWindow : Window
         {
             fdmSyncCancellation = null;
             CancelFdmSyncButton.IsEnabled = false;
+            analyzing = false;
+            RefreshCapture();
+        }
+    }
+
+    private void CancelReceiveFdmText_Click(object sender, RoutedEventArgs e) => textReceiveCancellation?.Cancel();
+
+    private async void ReceiveFdmText_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        analyzing = true;
+        RefreshCapture();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
+        textReceiveCancellation = cancellation;
+        CancelReceiveFdmTextButton.IsEnabled = true;
+        ReceivedFdmText.Text = "Buscando cabeceras y recuperando mensajes...";
+        try
+        {
+            var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token), cancellation.Token);
+            if (closing) return;
+            static string Describe(string name, FdmTextChannelResult channel) =>
+                $"Canal {name} · cabecera: {(channel.HeaderValid ? "validada" : "no validada")} · bytes: {channel.ByteLength?.ToString() ?? "desconocidos"} · " +
+                $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")}\n" +
+                (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason;
+            ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
+                result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+        }
+        catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; }
+        catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; }
+        finally
+        {
+            textReceiveCancellation = null;
+            CancelReceiveFdmTextButton.IsEnabled = false;
             analyzing = false;
             RefreshCapture();
         }

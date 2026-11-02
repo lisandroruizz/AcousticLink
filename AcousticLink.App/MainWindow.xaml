@@ -119,6 +119,12 @@
         <Button x:Name="CancelFdmSyncButton" Content="Cancelar búsqueda FDM" IsEnabled="False"
                 Padding="8" Margin="0,8,0,0" Click="CancelFdmSync_Click" />
         <TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Receptor" />
+        <Button x:Name="ReceiveFdmTextButton" Content="Recibir mensajes de la última grabación" IsEnabled="False"
+                Padding="8" Click="ReceiveFdmText_Click" />
+        <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar recepción" IsEnabled="False" Padding="8"
+                Margin="0,8,0,0" Click="CancelReceiveFdmText_Click" />
+        <TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto." TextWrapping="Wrap" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>

@@ -5,7 +5,10 @@ public enum FdmSynchronizationState { Failed, Partial, Complete }
 public sealed record FdmSynchronizedChannel(bool HeaderValid, BfskSequenceResult Header, BfskSequenceResult Data);
 
 public sealed record FdmSynchronizationResult(FdmSynchronizationState State, double? StartSeconds,
-    double? DataStartSeconds, FdmSynchronizedChannel? ChannelA, FdmSynchronizedChannel? ChannelB, string Reason);
+    double? DataStartSeconds, FdmSynchronizedChannel? ChannelA, FdmSynchronizedChannel? ChannelB, string Reason)
+{
+    public bool IsAmbiguous { get; init; }
+}
 
 public sealed class FdmFrameSynchronizer
 {
@@ -25,18 +28,28 @@ public sealed class FdmFrameSynchronizer
     public FdmSynchronizationResult Find(ReadOnlySpan<float> samples, int sampleRate, int dataBitCount,
         CancellationToken cancellationToken = default)
     {
-        if (sampleRate <= 2 * FdmToneMixer.ChannelBBit1Frequency)
-            throw new ArgumentOutOfRangeException(nameof(sampleRate));
         if (dataBitCount < 1 || dataBitCount > BfskFrameBuilder.MaximumDataBits)
             throw new ArgumentOutOfRangeException(nameof(dataBitCount), "Se requieren entre 1 y 16 bits de datos por canal.");
+        return FindCore(samples, sampleRate, dataBitCount, cancellationToken);
+    }
+
+    public FdmSynchronizationResult FindHeaders(ReadOnlySpan<float> samples, int sampleRate,
+        CancellationToken cancellationToken = default) => FindCore(samples, sampleRate, 0, cancellationToken);
+
+    private FdmSynchronizationResult FindCore(ReadOnlySpan<float> samples, int sampleRate, int dataBitCount,
+        CancellationToken cancellationToken)
+    {
+        if (sampleRate <= 2 * FdmToneMixer.ChannelBBit1Frequency)
+            throw new ArgumentOutOfRangeException(nameof(sampleRate));
         cancellationToken.ThrowIfCancellationRequested();
         foreach (float value in samples)
             if (!float.IsFinite(value)) throw new ArgumentException("Las muestras deben ser finitas.", nameof(samples));
 
         string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
         double step = FdmSequenceDecoder.SymbolDurationSeconds * sampleRate;
-        int lastStart = samples.Length - (int)Math.Round((header.Length + dataBitCount) * step);
-        if (lastStart < 0) return Failure("Grabación insuficiente o truncada para las tramas esperadas.");
+        double requiredSamples = Math.Round((header.Length + dataBitCount) * step);
+        if (requiredSamples > samples.Length) return Failure("Grabación insuficiente o truncada para las tramas esperadas.");
+        int lastStart = samples.Length - (int)requiredSamples;
         int coarseStep = Math.Max(1, (int)Math.Round(CoarseStepSeconds * sampleRate));
         int fineStep = Math.Max(1, (int)Math.Round(FineStepSeconds * sampleRate));
         var groups = new List<Candidate>();
@@ -54,7 +67,7 @@ public sealed class FdmFrameSynchronizer
             if (position == lastStart) break;
         }
         if (groups.Count == 0) return Failure("Ningún canal presenta preámbulo y marcador exactos y concluyentes.");
-        if (groups.Count > 1) return Failure("Sincronización ambigua: varias tramas o cabeceras separadas; no se elige una arbitrariamente.");
+        if (groups.Count > 1) return Failure("Sincronización ambigua: varias tramas o cabeceras separadas; no se elige una arbitrariamente.") with { IsAmbiguous = true };
 
         Candidate best = groups[0];
         int begin = Math.Max(0, best.Position - coarseStep);
@@ -69,7 +82,8 @@ public sealed class FdmFrameSynchronizer
 
         double start = best.Position / (double)sampleRate;
         double dataStart = start + header.Length * FdmSequenceDecoder.SymbolDurationSeconds;
-        var recovered = decoder.DecodeFrameSymbols(samples, sampleRate, start, dataBitCount);
+        var recovered = dataBitCount == 0 ? decoder.DecodeHeaders(samples, sampleRate, start, cancellationToken)
+            : decoder.DecodeFrameSymbols(samples, sampleRate, start, dataBitCount);
         FdmSynchronizedChannel Split(BfskSequenceResult channel)
         {
             var head = new BfskSequenceResult(Array.AsReadOnly(channel.Symbols.Take(header.Length).ToArray()));
@@ -81,7 +95,8 @@ public sealed class FdmFrameSynchronizer
         bool complete = a.HeaderValid && b.HeaderValid;
         return new(complete ? FdmSynchronizationState.Complete : FdmSynchronizationState.Partial,
             start, dataStart, a, b, complete
-                ? "Ambas cabeceras validadas. Los datos conservan sus '?' y no tienen verificación de integridad."
+                ? dataBitCount == 0 ? "Ambas cabeceras validadas; longitud y datos todavía no analizados."
+                    : "Ambas cabeceras validadas. Los datos conservan sus '?' y no tienen verificación de integridad."
                 : "Solo una cabecera es válida: inicio estimado desde ese canal. Los datos del otro canal no están sincronizados de forma validada.");
     }
 

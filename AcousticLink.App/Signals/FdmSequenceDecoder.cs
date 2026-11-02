@@ -30,8 +30,21 @@ public sealed class FdmSequenceDecoder
         return DecodeCore(samples, sampleRate, startSeconds, FdmBitstreamGenerator.HeaderBits + dataBitCount);
     }
 
+    public FdmSequenceResult DecodeHeaders(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, CancellationToken cancellationToken = default) =>
+        DecodeCore(samples, sampleRate, startSeconds, FdmBitstreamGenerator.HeaderBits, cancellationToken);
+
+    // Modo acotado del protocolo de texto; no cambia el máximo del modo manual de prueba.
+    public FdmSequenceResult DecodeMessageBlock(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int symbolCount, CancellationToken cancellationToken = default)
+    {
+        int maximum = Protocol.FdmTextFrameBuilder.MaximumFrameBits - FdmBitstreamGenerator.HeaderBits;
+        if (symbolCount < 8 || symbolCount > maximum) throw new ArgumentOutOfRangeException(nameof(symbolCount));
+        return DecodeCore(samples, sampleRate, startSeconds, symbolCount, cancellationToken);
+    }
+
     private FdmSequenceResult DecodeCore(ReadOnlySpan<float> samples, int sampleRate,
-        double startSeconds, int symbolCount)
+        double startSeconds, int symbolCount, CancellationToken cancellationToken = default)
     {
         if (sampleRate <= 2 * FdmToneMixer.ChannelBBit1Frequency)
             throw new ArgumentOutOfRangeException(nameof(sampleRate));
@@ -46,6 +59,7 @@ public sealed class FdmSequenceDecoder
         var b = new List<BfskSymbolResult>(symbolCount);
         for (int i = 0; i < symbolCount; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Cada límite parte del origen absoluto, sin sumar pasos ya redondeados.
             int start = (int)Math.Round(origin + i * step);
             int end = (int)Math.Round(origin + (i + 1) * step);
