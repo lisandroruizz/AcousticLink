@@ -144,6 +144,7 @@ public partial class MainWindow : Window
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
         AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        DecodeSequenceButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -202,6 +203,44 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             if (!closing) AnalysisResultText.Text = $"No se pudo analizar: {ex.Message}";
+        }
+        finally
+        {
+            analyzing = false;
+            RefreshCapture();
+        }
+    }
+
+    private async void DecodeSequence_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        if (!double.TryParse(SequenceStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0 ||
+            !int.TryParse(SequenceBitCountTextBox.Text, out int count) || count < 1 || count > BfskSequenceDecoder.MaximumBits)
+        {
+            DecodedSequenceText.Text = "Ingresá un inicio finito no negativo y una cantidad de 1 a 64 bits.";
+            SequenceDiagnosticsText.Clear();
+            return;
+        }
+        analyzing = true;
+        RefreshCapture();
+        DecodedSequenceText.Text = "Analizando secuencia...";
+        SequenceDiagnosticsText.Clear();
+        try
+        {
+            var result = await Task.Run(() => new BfskSequenceDecoder(toneDetector)
+                .Decode(recording.GetSamples(), recording.SampleRate, start, count));
+            if (closing) return;
+            DecodedSequenceText.Text = $"{result.Bits}\nConcluyentes: {result.ConclusiveCount} · no concluyentes: {result.InconclusiveCount}\n" +
+                (result.IsComplete ? "Todos los símbolos fueron concluyentes (sin verificación de integridad)." : "La secuencia no se recuperó completamente.");
+            SequenceDiagnosticsText.Text = string.Join(Environment.NewLine, result.Symbols.Select(s =>
+                $"Bit {s.Index + 1}: {s.Detection.Bit?.ToString() ?? "?"} · muestras [{s.StartSample}, {s.EndSample}) · " +
+                $"análisis [{s.AnalysisStartSample}, {s.AnalysisStartSample + s.AnalysisSampleCount}) · " +
+                $"E0={s.Detection.Energy0:G5}, E1={s.Detection.Energy1:G5} · {s.Detection.Reason}"));
+        }
+        catch (Exception ex)
+        {
+            if (!closing) DecodedSequenceText.Text = $"No se pudo decodificar: {ex.Message}";
         }
         finally
         {

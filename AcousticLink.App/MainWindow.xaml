@@ -31,6 +31,16 @@
         <Button x:Name="AnalyzeToneButton" Content="Analizar grabación finalizada" IsEnabled="False"
                 Padding="8" Margin="0,8,0,0" Click="AnalyzeTone_Click" />
         <TextBlock x:Name="AnalysisResultText" TextWrapping="Wrap" Margin="0,8,0,0" Text="Sin análisis." />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificar secuencia · inicio manual · 0,10 s por bit" />
+        <TextBlock Text="Inicio del primer bit (segundos, admite centésimas o más decimales):" />
+        <TextBox x:Name="SequenceStartTextBox" Text="0" Padding="8" />
+        <TextBlock Text="Cantidad esperada de bits (1–64):" Margin="0,8,0,0" />
+        <TextBox x:Name="SequenceBitCountTextBox" Text="8" Padding="8" />
+        <Button x:Name="DecodeSequenceButton" Content="Analizar secuencia grabada" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="DecodeSequence_Click" />
+        <TextBlock x:Name="DecodedSequenceText" Text="Sin decodificación." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBox x:Name="SequenceDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
+                 MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>
