@@ -5,10 +5,17 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:AcousticLink.App"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="AcousticLink - Emisor BFSK" Height="450" Width="800">
     <StackPanel Margin="24" VerticalAlignment="Center">
+        <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="Tonos aislados" />
         <Button x:Name="Bit0Button" Content="Reproducir bit 0 (1200 Hz)" Margin="0,0,0,12" Padding="12" Click="PlayBit0_Click" />
         <Button x:Name="Bit1Button" Content="Reproducir bit 1 (1900 Hz)" Padding="12" Click="PlayBit1_Click" />
+
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Secuencia BFSK" />
+        <TextBox x:Name="BitSequenceTextBox" Padding="8" Text="10110010" TextChanged="BitSequenceTextBox_TextChanged" />
+        <TextBlock x:Name="SequenceInfoText" Margin="0,6,0,10" Text="8 bits · duración estimada: 0,8 s" />
+        <Button x:Name="PlaySequenceButton" Content="Reproducir secuencia BFSK" Padding="12" Click="PlaySequence_Click" />
+
         <TextBlock x:Name="StatusText" Margin="0,16,0,0" TextWrapping="Wrap" Text="Tonos de prueba: 1 segundo, amplitud 0,15." />
     </StackPanel>
 </Window>
