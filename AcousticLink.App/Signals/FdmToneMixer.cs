@@ -7,20 +7,23 @@ public sealed class FdmToneMixer
     public const double ChannelABit1Frequency = BfskToneGenerator.Bit1Frequency;
     public const double ChannelBBit0Frequency = 3000;
     public const double ChannelBBit1Frequency = 3700;
-    public const double MaximumAmplitude = 0.15;
+    public const double MaximumAmplitude = FdmAmplitudeProfiles.MaximumAmplitude;
     private readonly BfskToneGenerator generator = new();
 
     public float[] Generate(bool bitA, bool bitB, double durationSeconds = 1,
-        double amplitude = MaximumAmplitude)
+        double amplitude = MaximumAmplitude, FdmAmplitudeProfile profile = FdmAmplitudeProfile.Original)
+        => GenerateStreams(bitA ? "1" : "0", bitB ? "1" : "0", durationSeconds, 1, profile, amplitude);
+
+    internal float[] GenerateStreams(string bitsA, string bitsB, double symbolDurationSeconds, int maximumBits,
+        FdmAmplitudeProfile profile, double amplitude = MaximumAmplitude)
     {
-        if (!double.IsFinite(amplitude) || amplitude < 0 || amplitude > MaximumAmplitude)
-            throw new ArgumentOutOfRangeException(nameof(amplitude), "La amplitud conjunta debe estar entre 0 y 0,15.");
-        double frequencyA = bitA ? ChannelABit1Frequency : ChannelABit0Frequency;
-        double frequencyB = bitB ? ChannelBBit1Frequency : ChannelBBit0Frequency;
-        float[] a = generator.GenerateTone(frequencyA, durationSeconds, amplitude / 2);
-        float[] b = generator.GenerateTone(frequencyB, durationSeconds, amplitude / 2);
-        // Ambas senoides usan las mismas rampas de 5 ms, en los extremos del bloque.
-        // e[n] * (A/2*sin(faseA[n]) + A/2*sin(faseB[n])); no se recorta ni normaliza.
+        if (bitsA.Length != bitsB.Length) throw new ArgumentException("Los canales deben tener igual cantidad de símbolos.");
+        var gains = FdmAmplitudeProfiles.GetGains(profile, amplitude);
+        float[] a = generator.GenerateSequence(bitsA, ChannelABit0Frequency, ChannelABit1Frequency,
+            symbolDurationSeconds, gains.A, maximumBits);
+        float[] b = generator.GenerateSequence(bitsB, ChannelBBit0Frequency, ChannelBBit1Frequency,
+            symbolDurationSeconds, gains.B, maximumBits);
+        // Envolvente común en los extremos, fases independientes; suma sin normalización ni recorte.
         return MixInPlace(a, b);
     }
 

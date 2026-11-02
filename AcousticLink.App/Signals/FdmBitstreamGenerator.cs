@@ -9,12 +9,12 @@ public sealed class FdmBitstreamGenerator
     public static int MaximumFrameBits => HeaderBits + BfskFrameBuilder.MaximumDataBits;
     public const int SampleRate = FdmToneMixer.SampleRate;
     public const double SymbolDurationSeconds = BfskToneGenerator.DefaultBitDurationSeconds;
-    private readonly BfskToneGenerator generator = new();
+    private readonly FdmToneMixer mixer = new();
 
-    public float[] Generate(string bitsA, string bitsB)
+    public float[] Generate(string bitsA, string bitsB, FdmAmplitudeProfile profile = FdmAmplitudeProfile.Original)
     {
         ValidateSequences(bitsA, bitsB);
-        return GenerateCore(bitsA, bitsB);
+        return GenerateCore(bitsA, bitsB, profile);
     }
 
     public static (string ChannelA, string ChannelB) BuildFrames(string dataA, string dataB)
@@ -25,29 +25,23 @@ public sealed class FdmBitstreamGenerator
     }
 
     // Recibe datos de 1–16 bits; solo este modo puede generar cabeceras + datos (25–40 símbolos).
-    public float[] GenerateFrames(string dataA, string dataB)
+    public float[] GenerateFrames(string dataA, string dataB, FdmAmplitudeProfile profile = FdmAmplitudeProfile.Original)
     {
         var frames = BuildFrames(dataA, dataB);
-        return GenerateCore(frames.ChannelA, frames.ChannelB);
+        return GenerateCore(frames.ChannelA, frames.ChannelB, profile);
     }
 
-    public float[] GenerateTextFrames(string textA, string textB, bool useHamming = false)
+    public float[] GenerateTextFrames(string textA, string textB, bool useHamming = false,
+        FdmAmplitudeProfile profile = FdmAmplitudeProfile.Original)
     {
         var frames = new FdmTextFrameBuilder().Build(textA, textB, useHamming);
-        return GenerateCore(frames.ChannelA.TransmittedBits, frames.ChannelB.TransmittedBits,
+        return GenerateCore(frames.ChannelA.TransmittedBits, frames.ChannelB.TransmittedBits, profile,
             useHamming ? FdmTextFrameBuilder.MaximumProtectedFrameBits : FdmTextFrameBuilder.MaximumFrameBits);
     }
 
-    private float[] GenerateCore(string bitsA, string bitsB, int maximumBits = BfskToneGenerator.MaximumSequenceLength)
-    {
-        double perChannelAmplitude = FdmToneMixer.MaximumAmplitude / 2;
-        // Cada llamada conserva su propio acumulador de fase y usa una envolvente global.
-        float[] a = generator.GenerateSequence(bitsA, FdmToneMixer.ChannelABit0Frequency,
-            FdmToneMixer.ChannelABit1Frequency, SymbolDurationSeconds, perChannelAmplitude, maximumBits);
-        float[] b = generator.GenerateSequence(bitsB, FdmToneMixer.ChannelBBit0Frequency,
-            FdmToneMixer.ChannelBBit1Frequency, SymbolDurationSeconds, perChannelAmplitude, maximumBits);
-        return FdmToneMixer.MixInPlace(a, b);
-    }
+    private float[] GenerateCore(string bitsA, string bitsB, FdmAmplitudeProfile profile,
+        int maximumBits = BfskToneGenerator.MaximumSequenceLength) =>
+        mixer.GenerateStreams(bitsA, bitsB, SymbolDurationSeconds, maximumBits, profile);
 
     public static void ValidateSequences(string bitsA, string bitsB)
     {

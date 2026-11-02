@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using AcousticLink.App.Audio;
 using AcousticLink.App.Signals;
 using AcousticLink.App.Protocol;
+using AcousticLink.App.Experiments;
 
 namespace AcousticLink.App;
 
@@ -24,11 +25,18 @@ public partial class MainWindow : Window
     private bool analyzing;
     private CancellationTokenSource? fdmSyncCancellation;
     private CancellationTokenSource? textReceiveCancellation;
+    private CancellationTokenSource? experimentCancellation;
+    private FdmExperimentResult? lastExperiment;
     private readonly BfskToneDetector toneDetector = new();
 
     public MainWindow()
     {
         InitializeComponent();
+        FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
+        FdmProfileComboBox.SelectedIndex = 0;
+        ExperimentProfileComboBox.Items.Add("No informado / desconocido");
+        foreach (var profile in FdmAmplitudeProfiles.All) ExperimentProfileComboBox.Items.Add(profile);
+        ExperimentProfileComboBox.SelectedIndex = 0;
         UpdateFramePreview();
         UpdateFdmSequencesInfo();
         UpdateFdmFramesInfo();
@@ -107,11 +115,12 @@ public partial class MainWindow : Window
     {
         bool bitA = FdmBitAComboBox.SelectedIndex == 1;
         bool bitB = FdmBitBComboBox.SelectedIndex == 1;
+        var profile = SelectedFdmProfile;
         SetPlaybackControls(false);
         FdmStatusText.Text = $"Reproduciendo FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)}...";
         try
         {
-            float[] samples = fdmMixer.Generate(bitA, bitB);
+            float[] samples = fdmMixer.Generate(bitA, bitB, profile: profile);
             await playback.PlayAsync(samples, FdmToneMixer.SampleRate, windowLifetime.Token);
             FdmStatusText.Text = "Reproducción FDM finalizada.";
         }
@@ -142,6 +151,7 @@ public partial class MainWindow : Window
     {
         string a = FdmSequenceATextBox.Text;
         string b = FdmSequenceBTextBox.Text;
+        var profile = SelectedFdmProfile;
         try { FdmBitstreamGenerator.ValidateSequences(a, b); }
         catch (ArgumentException ex) { FdmSequencesStatusText.Text = ex.Message; return; }
         SetPlaybackControls(false);
@@ -149,7 +159,7 @@ public partial class MainWindow : Window
         CancellationToken token = windowLifetime.Token;
         try
         {
-            float[] samples = await Task.Run(() => fdmBitstreamGenerator.Generate(a, b), token);
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.Generate(a, b, profile), token);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmSequencesStatusText.Text = "Reproducción de ambas secuencias finalizada.";
         }
@@ -180,6 +190,7 @@ public partial class MainWindow : Window
     private async void PlayFdmFrames_Click(object sender, RoutedEventArgs e)
     {
         string a = FdmFrameATextBox.Text, b = FdmFrameBTextBox.Text;
+        var profile = SelectedFdmProfile;
         try { FdmBitstreamGenerator.ValidateSequences(a, b); }
         catch (ArgumentException ex) { FdmFramesStatusText.Text = ex.Message; return; }
         SetPlaybackControls(false);
@@ -187,7 +198,7 @@ public partial class MainWindow : Window
         CancellationToken token = windowLifetime.Token;
         try
         {
-            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateFrames(a, b), token);
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateFrames(a, b, profile), token);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmFramesStatusText.Text = "Reproducción de tramas FDM finalizada.";
         }
@@ -219,6 +230,7 @@ public partial class MainWindow : Window
     {
         string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text;
         bool useHamming = UseHammingTransmitCheckBox.IsChecked == true;
+        var profile = SelectedFdmProfile;
         try { _ = new FdmTextFrameBuilder().Build(a, b, useHamming); }
         catch (ArgumentException ex) { FdmTextStatusText.Text = ex.Message; return; }
         SetPlaybackControls(false);
@@ -226,7 +238,7 @@ public partial class MainWindow : Window
         CancellationToken token = windowLifetime.Token;
         try
         {
-            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, useHamming), token);
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, useHamming, profile), token);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmTextStatusText.Text = "Reproducción de mensajes finalizada (recepción aún no verificada).";
         }
@@ -263,8 +275,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private FdmAmplitudeProfile SelectedFdmProfile =>
+        (FdmProfileComboBox.SelectedItem as FdmAmplitudeSetting)?.Profile ?? FdmAmplitudeProfile.Original;
+
     private void SetPlaybackControls(bool enabled)
     {
+        FdmProfileComboBox.IsEnabled = enabled;
         Bit0Button.IsEnabled = enabled;
         Bit1Button.IsEnabled = enabled;
         BitSequenceTextBox.IsEnabled = enabled;
@@ -303,7 +319,11 @@ public partial class MainWindow : Window
         {
             int seconds = int.Parse((string)((ComboBoxItem)CaptureDurationComboBox.SelectedItem).Tag);
             await capture.StartAsync(seconds);
-            if (capture.Recording is { } started) audioSelection.SelectMicrophone(started, capture.FormatDescription);
+            if (capture.Recording is { } started)
+            {
+                audioSelection.SelectMicrophone(started, capture.FormatDescription);
+                ExperimentProfileComboBox.SelectedIndex = 0;
+            }
         }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo iniciar el micrófono: {ex.Message}"; }
         captureBusy = false;
@@ -337,6 +357,12 @@ public partial class MainWindow : Window
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         UseHammingReceiveCheckBox.IsEnabled = !analyzing;
+        AnalyzeExperimentButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        ExportExperimentButton.IsEnabled = lastExperiment is not null && !analyzing && !capture.IsRecording && !captureBusy;
+        ExperimentExpectedATextBox.IsEnabled = !analyzing;
+        ExperimentExpectedBTextBox.IsEnabled = !analyzing;
+        ExperimentHammingCheckBox.IsEnabled = !analyzing;
+        ExperimentProfileComboBox.IsEnabled = !analyzing;
         AudioSourceText.Text = audioSelection.Current?.Source ?? "Sin audio seleccionado.";
         CaptureFormatText.Text = audioSelection.Current?.FormatDescription ?? "Sin formato seleccionado.";
         if (recording is not null)
@@ -371,7 +397,12 @@ public partial class MainWindow : Window
         try
         {
             await Task.Run(() => audioSelection.ImportWav(dialog.FileName, token), token);
-            if (!closing) CaptureStatusText.Text = "WAV importado. Elegí la herramienta de análisis y la modalidad Hamming correspondiente.";
+            if (!closing)
+            {
+                // Un nuevo archivo no hereda la declaración de perfil de la grabación anterior.
+                ExperimentProfileComboBox.SelectedIndex = 0;
+                CaptureStatusText.Text = "WAV importado. Elegí la herramienta de análisis y la modalidad Hamming correspondiente.";
+            }
         }
         catch (OperationCanceledException) { if (!closing) CaptureStatusText.Text = "Importación cancelada; se conserva la selección anterior."; }
         catch (Exception ex) { if (!closing) CaptureStatusText.Text = $"No se pudo cargar el WAV; se conserva el audio anterior. {ex.Message}"; }
@@ -670,6 +701,80 @@ public partial class MainWindow : Window
             analyzing = false;
             RefreshCapture();
         }
+    }
+
+    private void CancelExperiment_Click(object sender, RoutedEventArgs e) => experimentCancellation?.Cancel();
+
+    private async void AnalyzeExperiment_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = audioSelection.Current;
+        if (selected is null || capture.IsRecording || captureBusy || analyzing) return;
+        string a = ExperimentExpectedATextBox.Text, b = ExperimentExpectedBTextBox.Text;
+        bool hamming = ExperimentHammingCheckBox.IsChecked == true;
+        FdmAmplitudeProfile? declaredProfile = (ExperimentProfileComboBox.SelectedItem as FdmAmplitudeSetting)?.Profile;
+        lastExperiment = null;
+        ExperimentDetailsText.Clear();
+        analyzing = true;
+        RefreshCapture();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
+        experimentCancellation = cancellation;
+        CancelExperimentButton.IsEnabled = true;
+        ExperimentSummaryText.Text = "Midiendo contra las referencias indicadas...";
+        try
+        {
+            var result = await Task.Run(() => new FdmExperimentAnalyzer().Analyze(selected.Audio.GetSamples(), selected.Audio.SampleRate,
+                a, b, hamming, selected.Source, cancellation.Token, declaredProfile), cancellation.Token);
+            if (closing) return;
+            lastExperiment = result;
+            static string Describe(string title, BitComparison? comparison) => comparison is null ? $"{title}: no calculable (sin alineación validada)." :
+                $"{title}: esperados {comparison.ExpectedCount}, comparados {comparison.ComparedBits}, errores {comparison.IncorrectBits}, " +
+                $"no concluyentes {comparison.InconclusiveBits}, faltantes {comparison.MissingBits}, BER " +
+                (comparison.Ber.HasValue ? $"{comparison.Ber.Value:G5}" : "no calculable") + $", cobertura {comparison.Coverage:P1}.";
+            string ChannelSummary(FdmChannelExperiment channel)
+            {
+                string crc = channel.Reception.CrcValid is true ? "válido" : channel.Reception.CrcValid is false ? "inválido" : "no comprobado";
+                string summary = $"Canal {channel.Channel} · cabecera {(channel.Reception.HeaderValid ? "validada" : "no validada")} · CRC {crc}\n" +
+                    Describe(hamming ? "Antes (bits codificados)" : "Bloque original", channel.Before);
+                if (hamming)
+                {
+                    summary += "\n" + Describe("Después (bits originales)", channel.After);
+                    if (channel.Hamming is { } h)
+                        summary += $"\nHamming: {h.AnalyzedWords} palabras analizadas, {h.NonzeroSyndromes} síndromes no nulos, " +
+                            $"{h.AppliedBitFlips} inversiones intentadas, {h.InconclusiveWords} palabras con '?', {h.IncompleteWords} incompletas.";
+                }
+                return summary;
+            }
+            ExperimentSummaryText.Text = $"Origen analizado: {result.AudioSource}\nPerfil declarado por el usuario: " +
+                (result.DeclaredAmplitudeProfile.HasValue ? FdmAmplitudeProfiles.Get(result.DeclaredAmplitudeProfile.Value).Label : "no informado") +
+                $"\n{result.SampleRate} Hz · {result.AudioDurationSeconds:0.000} s · " +
+                $"sincronización {result.Synchronization.State}\n{ChannelSummary(result.ChannelA)}\n\n{ChannelSummary(result.ChannelB)}";
+            ExperimentDetailsText.Text = result.Synchronization.Reason + "\n" + string.Join("\n\n", new[] { result.ChannelA, result.ChannelB }.Select(c =>
+                $"Canal {c.Channel}: {c.Diagnostic}\nReferencia original: {c.OriginalReferenceBits}\nReferencia transmitida: {c.TransmittedReferenceBits}\n" +
+                $"Recibidos: {c.Before?.ObservedBits ?? "no evaluables"}\nReconstruidos: {c.After?.ObservedBits ?? "no corresponde/no evaluables"}"));
+        }
+        catch (OperationCanceledException) { if (!closing) ExperimentSummaryText.Text = "Medición cancelada; no se generaron resultados."; }
+        catch (Exception ex) { if (!closing) ExperimentSummaryText.Text = $"No se pudo medir: {ex.Message}"; }
+        finally
+        {
+            experimentCancellation = null;
+            CancelExperimentButton.IsEnabled = false;
+            analyzing = false;
+            RefreshCapture();
+        }
+    }
+
+    private async void ExportExperiment_Click(object sender, RoutedEventArgs e)
+    {
+        var result = lastExperiment;
+        if (result is null || analyzing) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "Resultados CSV (*.csv)|*.csv", FileName = "medicion-fdm.csv" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            await Task.Run(() => FdmExperimentCsv.Save(dialog.FileName, result));
+            if (!closing) ExperimentSummaryText.Text += $"\nCSV guardado: {dialog.FileName}";
+        }
+        catch (Exception ex) { if (!closing) ExperimentSummaryText.Text += $"\nNo se pudo guardar CSV: {ex.Message}"; }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

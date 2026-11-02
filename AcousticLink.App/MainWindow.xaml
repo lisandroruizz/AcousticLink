@@ -22,6 +22,8 @@
 
         <TextBlock x:Name="StatusText" Margin="0,16,0,0" TextWrapping="Wrap" Text="Tonos de prueba: 1 segundo, amplitud 0,15." />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Prueba FDM · dos tonos simultáneos · 1 segundo" />
+        <TextBlock Text="Perfil de amplitud para todas las nuevas emisiones FDM:" TextWrapping="Wrap" />
+        <ComboBox x:Name="FdmProfileComboBox" Margin="0,4,0,8" />
         <TextBlock Text="Canal A:" />
         <ComboBox x:Name="FdmBitAComboBox" SelectedIndex="0" Margin="0,4,0,8">
             <ComboBoxItem Content="Bit 0 · 1200 Hz" />
@@ -32,7 +34,7 @@
             <ComboBoxItem Content="Bit 0 · 3000 Hz" />
             <ComboBoxItem Content="Bit 1 · 3700 Hz" />
         </ComboBox>
-        <TextBlock Text="Amplitud por tono: 0,075 · límite teórico conjunto: 0,15 · mono, 48 kHz" TextWrapping="Wrap" />
+        <TextBlock Text="Amplitudes según perfil · límite teórico conjunto: 0,15 · mono, 48 kHz" TextWrapping="Wrap" />
         <Button x:Name="PlayFdmButton" Content="Reproducir ambos tonos" Padding="12" Margin="0,8,0,0" Click="PlayFdm_Click" />
         <TextBlock x:Name="FdmStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Secuencias FDM simultáneas · igual longitud (1–16 bits)" />
@@ -134,6 +136,22 @@
         <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar recepción" IsEnabled="False" Padding="8"
                 Margin="0,8,0,0" Click="CancelReceiveFdmText_Click" />
         <TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mediciones experimentales FDM" />
+        <TextBlock Text="Referencias conocidas realmente transmitidas. Cabeceras y relleno se excluyen de la BER." TextWrapping="Wrap" />
+        <TextBlock Text="Mensaje original esperado A:" Margin="0,8,0,0" />
+        <TextBox x:Name="ExperimentExpectedATextBox" Text="Hola" Padding="8" />
+        <TextBlock Text="Mensaje original esperado B:" Margin="0,8,0,0" />
+        <TextBox x:Name="ExperimentExpectedBTextBox" Text="Mundo" Padding="8" />
+        <CheckBox x:Name="ExperimentHammingCheckBox" Content="Transmisión con Hamming (7,4)" IsChecked="False" Margin="0,8,0,0" />
+        <TextBlock Text="Perfil utilizado al transmitir (declaración manual, no medición del receptor):" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <ComboBox x:Name="ExperimentProfileComboBox" Margin="0,4,0,0" />
+        <Button x:Name="AnalyzeExperimentButton" Content="Medir grabación seleccionada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeExperiment_Click" />
+        <Button x:Name="CancelExperimentButton" Content="Cancelar medición" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelExperiment_Click" />
+        <Button x:Name="ExportExperimentButton" Content="Exportar medición a CSV" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="ExportExperiment_Click" />
+        <TextBlock x:Name="ExperimentSummaryText" Text="Sin mediciones." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Expander Header="Detalles y referencias de la última medición" Margin="0,8,0,0">
+            <TextBox x:Name="ExperimentDetailsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="250" VerticalScrollBarVisibility="Auto" />
+        </Expander>
     </StackPanel>
     </ScrollViewer>
 </Window>
