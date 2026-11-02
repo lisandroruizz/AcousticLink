@@ -79,6 +79,16 @@
         <Button x:Name="AnalyzeFdmButton" Content="Analizar ambos canales" IsEnabled="False"
                 Padding="8" Margin="0,8,0,0" Click="AnalyzeFdm_Click" />
         <TextBlock x:Name="FdmDetectionText" Text="Sin análisis FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificación FDM" />
+        <TextBlock Text="Última grabación finalizada · inicio común manual (segundos):" />
+        <TextBox x:Name="FdmDecodeStartTextBox" Text="0" Padding="8" />
+        <TextBlock Text="Símbolos esperados por canal (1–16):" Margin="0,8,0,0" />
+        <TextBox x:Name="FdmDecodeCountTextBox" Text="8" Padding="8" />
+        <Button x:Name="DecodeFdmButton" Content="Decodificar ambas secuencias" IsEnabled="False"
+                Padding="8" Margin="0,8,0,0" Click="DecodeFdm_Click" />
+        <TextBlock x:Name="FdmDecodedText" Text="Sin decodificación FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBox x:Name="FdmDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap"
+                 MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
     </StackPanel>
     </ScrollViewer>
 </Window>

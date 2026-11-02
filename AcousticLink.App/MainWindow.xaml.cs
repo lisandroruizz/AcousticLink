@@ -240,6 +240,7 @@ public partial class MainWindow : Window
         DecodeSequenceButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         SynchronizeButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         AnalyzeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
+        DecodeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
             CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
@@ -406,6 +407,41 @@ public partial class MainWindow : Window
                 $"Canal B: {Describe(result.ChannelB)}\nE3000={result.ChannelB.Energy0:G6} · E3700={result.ChannelB.Energy1:G6}";
         }
         catch (Exception ex) { if (!closing) FdmDetectionText.Text = $"No se pudo analizar FDM: {ex.Message}"; }
+        finally { analyzing = false; RefreshCapture(); }
+    }
+
+    private async void DecodeFdm_Click(object sender, RoutedEventArgs e)
+    {
+        var recording = capture.Recording;
+        if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        FdmDiagnosticsText.Clear();
+        if (!double.TryParse(FdmDecodeStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0 ||
+            !int.TryParse(FdmDecodeCountTextBox.Text, out int count) || count < 1 || count > FdmSequenceDecoder.MaximumSymbols)
+        {
+            FdmDecodedText.Text = "Ingresá un inicio finito no negativo y entre 1 y 16 símbolos.";
+            return;
+        }
+        analyzing = true;
+        RefreshCapture();
+        FdmDecodedText.Text = "Decodificando FDM...";
+        try
+        {
+            var result = await Task.Run(() => new FdmSequenceDecoder()
+                .Decode(recording.GetSamples(), recording.SampleRate, start, count));
+            if (closing) return;
+            static string Describe(string name, BfskSequenceResult channel) =>
+                $"Canal {name}: {channel.Bits}\nConcluyentes: {channel.ConclusiveCount} · no concluyentes: {channel.InconclusiveCount} · " +
+                (channel.IsComplete ? "recuperación completa (sin verificación de integridad)." : "recuperación parcial.");
+            FdmDecodedText.Text = Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+            FdmDiagnosticsText.Text = string.Join(Environment.NewLine, result.ChannelA.Symbols.Select((a, i) =>
+            {
+                var b = result.ChannelB.Symbols[i];
+                return $"Símbolo {i + 1} · muestras [{a.StartSample}, {a.EndSample}) · análisis [{a.AnalysisStartSample}, {a.AnalysisStartSample + a.AnalysisSampleCount})\n" +
+                    $"A={a.Detection.Bit?.ToString() ?? "?"}, E1200={a.Detection.Energy0:G5}, E1900={a.Detection.Energy1:G5}: {a.Detection.Reason}\n" +
+                    $"B={b.Detection.Bit?.ToString() ?? "?"}, E3000={b.Detection.Energy0:G5}, E3700={b.Detection.Energy1:G5}: {b.Detection.Reason}";
+            }));
+        }
+        catch (Exception ex) { if (!closing) FdmDecodedText.Text = $"No se pudo decodificar FDM: {ex.Message}"; }
         finally { analyzing = false; RefreshCapture(); }
     }
 
