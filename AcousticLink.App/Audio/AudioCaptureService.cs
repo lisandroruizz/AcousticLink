@@ -18,8 +18,9 @@ public sealed class AudioCaptureService : IAsyncDisposable
     public string FormatDescription => Volatile.Read(ref format);
     public string? Error => Volatile.Read(ref error);
 
-    public async Task StartAsync()
+    public async Task StartAsync(int maximumDurationSeconds = CapturedAudio.DefaultMaximumSeconds)
     {
+        CapturedAudio.ValidateDuration(maximumDurationSeconds);
         await lifecycle.WaitAsync();
         try
         {
@@ -29,13 +30,13 @@ public sealed class AudioCaptureService : IAsyncDisposable
             stop = new CancellationTokenSource();
             error = null;
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            session = Task.Run(() => CaptureAsync(ready, stop.Token));
+            session = Task.Run(() => CaptureAsync(ready, stop.Token, maximumDurationSeconds));
             await ready.Task;
         }
         finally { lifecycle.Release(); }
     }
 
-    private async Task CaptureAsync(TaskCompletionSource ready, CancellationToken token)
+    private async Task CaptureAsync(TaskCompletionSource ready, CancellationToken token, int maximumDurationSeconds)
     {
         try
         {
@@ -44,7 +45,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
             {
                 recorder = new WasapiRecorderBuilder().WithSharedMode()
                     .WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 1)).Build();
-                try { await RecordAsync(recorder, ready, token); }
+                try { await RecordAsync(recorder, ready, token, maximumDurationSeconds); }
                 finally { await recorder.DisposeAsync(); }
                 return;
             }
@@ -56,22 +57,23 @@ public sealed class AudioCaptureService : IAsyncDisposable
 
             await using (recorder)
             {
-                await RecordAsync(recorder, ready, token);
+                await RecordAsync(recorder, ready, token, maximumDurationSeconds);
             }
         }
         catch (OperationCanceledException) { ready.TrySetCanceled(); }
         catch (Exception ex)
         {
             error = ex.Message;
+            Recording?.Complete(CaptureStopReason.Error);
             ready.TrySetException(ex);
         }
         finally { running = false; }
     }
 
-    private async Task RecordAsync(WasapiRecorder recorder, TaskCompletionSource ready, CancellationToken token)
+    private async Task RecordAsync(WasapiRecorder recorder, TaskCompletionSource ready, CancellationToken token, int maximumDurationSeconds)
     {
         var waveFormat = recorder.WaveFormat;
-        var captured = new CapturedAudio(waveFormat.SampleRate, waveFormat.Channels);
+        var captured = new CapturedAudio(waveFormat.SampleRate, waveFormat.Channels, maximumDurationSeconds);
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         recorder.RecordingStopped += (_, e) =>
         {
@@ -89,7 +91,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
                 var values = new float[(bytes.Length / waveFormat.BlockAlign) * waveFormat.Channels];
                 int read = source.Read(values.AsSpan());
                 captured.Append(values, read);
-                if (captured.GetStatus().Count >= waveFormat.SampleRate * 10) finished.TrySetResult();
+                if (captured.GetStatus().Count >= captured.SampleCapacity) finished.TrySetResult();
             }
             catch (Exception ex) { finished.TrySetException(ex); }
         };
@@ -99,8 +101,23 @@ public sealed class AudioCaptureService : IAsyncDisposable
         running = true;
         ready.TrySetResult();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(10));
-        await finished.Task.WaitAsync(timeout.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(maximumDurationSeconds));
+        try
+        {
+            await finished.Task.WaitAsync(timeout.Token);
+            captured.Complete(CaptureStopReason.DeviceStopped);
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            // El límite de reloj también evita esperar indefinidamente si dejan de llegar paquetes.
+            // Se conservan solo las muestras reales: no se inventan muestras para completar el tiempo.
+            captured.Complete(CaptureStopReason.DurationLimit);
+        }
+        catch
+        {
+            captured.Complete(token.IsCancellationRequested ? CaptureStopReason.ApplicationClosing : CaptureStopReason.Error);
+            throw;
+        }
     }
 
     public async Task StopAsync()
@@ -108,6 +125,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
         await lifecycle.WaitAsync();
         try
         {
+            if (!session.IsCompleted) Recording?.Complete(CaptureStopReason.Manual);
             stop?.Cancel();
             await session;
         }
@@ -121,6 +139,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
         {
             if (disposed) return;
             disposed = true;
+            if (!session.IsCompleted) Recording?.Complete(CaptureStopReason.ApplicationClosing);
             stop?.Cancel();
             await session;
             stop?.Dispose();

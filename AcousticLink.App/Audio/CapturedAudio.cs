@@ -2,6 +2,8 @@ using NAudio.Wave;
 
 namespace AcousticLink.App.Audio;
 
+public enum CaptureStopReason { None, Manual, DurationLimit, ApplicationClosing, DeviceStopped, Error }
+
 // Buffer acotado: los canales de entrada se promedian explícitamente a mono.
 public sealed class CapturedAudio
 {
@@ -9,16 +11,44 @@ public sealed class CapturedAudio
     private readonly float[] samples;
     private int count;
     private float peak;
+    private double sumSquares;
+    private CaptureStopReason stopReason;
+    public const int DefaultMaximumSeconds = 10;
+    public const int MinimumSeconds = 5;
+    public const int MaximumSeconds = 30;
+    public int MaximumDurationSeconds { get; }
+    public int SampleCapacity => samples.Length;
     public int SampleRate { get; }
     public int InputChannels { get; }
 
-    public CapturedAudio(int sampleRate, int inputChannels)
+    public CapturedAudio(int sampleRate, int inputChannels, int maximumDurationSeconds = DefaultMaximumSeconds)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(inputChannels);
+        ValidateDuration(maximumDurationSeconds);
         SampleRate = sampleRate;
         InputChannels = inputChannels;
-        samples = new float[checked(sampleRate * 10)];
+        MaximumDurationSeconds = maximumDurationSeconds;
+        samples = new float[checked(sampleRate * maximumDurationSeconds)];
+    }
+
+    public static void ValidateDuration(int seconds)
+    {
+        if (seconds < MinimumSeconds || seconds > MaximumSeconds)
+            throw new ArgumentOutOfRangeException(nameof(seconds), "La duración máxima debe estar entre 5 y 30 segundos.");
+    }
+
+    public (int Count, float Peak, double Rms, double DurationSeconds, CaptureStopReason StopReason) GetMetrics()
+    {
+        lock (sync) return (count, peak, count > 0 ? Math.Sqrt(sumSquares / count) : 0,
+            count / (double)SampleRate, stopReason);
+    }
+
+    public void Complete(CaptureStopReason reason)
+    {
+        if (reason == CaptureStopReason.None || !Enum.IsDefined(reason)) throw new ArgumentOutOfRangeException(nameof(reason));
+        lock (sync)
+            if (stopReason == CaptureStopReason.None) stopReason = reason;
     }
 
     public (int Count, float Peak) GetStatus()
@@ -32,6 +62,7 @@ public sealed class CapturedAudio
             throw new ArgumentException("El bloque debe contener cuadros completos.");
         lock (sync)
         {
+            if (stopReason != CaptureStopReason.None) return;
             for (int i = 0; i < length && count < samples.Length; i += InputChannels)
             {
                 double sum = 0;
@@ -39,7 +70,9 @@ public sealed class CapturedAudio
                 float value = (float)(sum / InputChannels);
                 samples[count++] = value;
                 peak = Math.Max(peak, Math.Abs(value));
+                sumSquares += (double)value * value;
             }
+            if (count == samples.Length) stopReason = CaptureStopReason.DurationLimit;
         }
     }
 
@@ -50,8 +83,11 @@ public sealed class CapturedAudio
 
     public void SaveWav(string path)
     {
-        float[] copy = GetSamples();
+        // El prefijo publicado nunca se modifica: solo se agregan nuevas muestras al final.
+        // Exportar ese prefijo evita duplicar hasta 5,76 MB para guardar un WAV de 30 s.
+        int snapshotCount;
+        lock (sync) snapshotCount = count;
         using var writer = new WaveFileWriter(path, WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 1));
-        writer.WriteSamples(copy, 0, copy.Length);
+        writer.WriteSamples(samples, 0, snapshotCount);
     }
 }

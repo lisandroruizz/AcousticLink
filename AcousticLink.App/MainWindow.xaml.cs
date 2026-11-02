@@ -252,7 +252,11 @@ public partial class MainWindow : Window
         captureBusy = true;
         SaveCaptureButton.IsEnabled = false;
         CaptureStatusText.Text = "Inicializando micrófono...";
-        try { await capture.StartAsync(); }
+        try
+        {
+            int seconds = int.Parse((string)((ComboBoxItem)CaptureDurationComboBox.SelectedItem).Tag);
+            await capture.StartAsync(seconds);
+        }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo iniciar el micrófono: {ex.Message}"; }
         captureBusy = false;
         RefreshCapture();
@@ -272,6 +276,7 @@ public partial class MainWindow : Window
         if (closing) return;
         StartCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy;
         StopCaptureButton.IsEnabled = capture.IsRecording && !captureBusy;
+        CaptureDurationComboBox.IsEnabled = !capture.IsRecording && !captureBusy;
         var recording = capture.Recording;
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
@@ -283,10 +288,21 @@ public partial class MainWindow : Window
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         CaptureFormatText.Text = capture.FormatDescription;
         if (recording is not null)
-            CaptureMetricsText.Text = $"Duración: {metrics.Count / (double)recording.SampleRate:0.00} s · {metrics.Count} muestras · pico: {metrics.Peak:0.0000}";
+        {
+            var details = recording.GetMetrics();
+            CaptureMetricsText.Text = $"Duración: {details.DurationSeconds:0.00} / {recording.MaximumDurationSeconds} s · {details.Count} muestras · RMS: {details.Rms:0.0000} · pico: {details.Peak:0.0000}";
+        }
         if (capture.Error is not null) CaptureStatusText.Text = $"Error del micrófono: {capture.Error}";
         else if (capture.IsRecording) CaptureStatusText.Text = "Grabando micrófono...";
-        else if (recording is not null && wasCaptureRecording) CaptureStatusText.Text = "Micrófono detenido (máximo 10 s).";
+        else if (recording is not null && wasCaptureRecording)
+            CaptureStatusText.Text = recording.GetMetrics().StopReason switch
+            {
+                CaptureStopReason.Manual => "Grabación detenida manualmente.",
+                CaptureStopReason.DurationLimit => $"Grabación finalizada por límite de {recording.MaximumDurationSeconds} segundos.",
+                CaptureStopReason.ApplicationClosing => "Grabación cancelada por cierre.",
+                CaptureStopReason.Error => "Grabación finalizada con error.",
+                _ => "Micrófono detenido por el dispositivo."
+            };
         wasCaptureRecording = capture.IsRecording;
     }
 
