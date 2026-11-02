@@ -16,12 +16,27 @@ public sealed class FdmSequenceDecoder
     public FdmSequenceResult Decode(ReadOnlySpan<float> samples, int sampleRate,
         double startSeconds, int symbolCount)
     {
+        if (symbolCount < 1 || symbolCount > MaximumSymbols)
+            throw new ArgumentOutOfRangeException(nameof(symbolCount), "Se requieren entre 1 y 16 símbolos.");
+        return DecodeCore(samples, sampleRate, startSeconds, symbolCount);
+    }
+
+    // Inicio conocido; devuelve todos los símbolos sin buscar ni validar automáticamente cabeceras.
+    public FdmSequenceResult DecodeFrameSymbols(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int dataBitCount)
+    {
+        if (dataBitCount < 1 || dataBitCount > BfskFrameBuilder.MaximumDataBits)
+            throw new ArgumentOutOfRangeException(nameof(dataBitCount), "Se requieren entre 1 y 16 bits de datos.");
+        return DecodeCore(samples, sampleRate, startSeconds, FdmBitstreamGenerator.HeaderBits + dataBitCount);
+    }
+
+    private FdmSequenceResult DecodeCore(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int symbolCount)
+    {
         if (sampleRate <= 2 * FdmToneMixer.ChannelBBit1Frequency)
             throw new ArgumentOutOfRangeException(nameof(sampleRate));
         if (!double.IsFinite(startSeconds) || startSeconds < 0)
             throw new ArgumentOutOfRangeException(nameof(startSeconds), "El inicio debe ser finito y no negativo.");
-        if (symbolCount < 1 || symbolCount > MaximumSymbols)
-            throw new ArgumentOutOfRangeException(nameof(symbolCount), "Se requieren entre 1 y 16 símbolos.");
         double origin = startSeconds * sampleRate;
         double step = SymbolDurationSeconds * sampleRate;
         if (!double.IsFinite(origin) || Math.Round(origin + symbolCount * step) > samples.Length)

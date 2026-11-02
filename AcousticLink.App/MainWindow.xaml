@@ -44,6 +44,14 @@
         <Button x:Name="PlayFdmSequencesButton" Content="Reproducir ambas secuencias" Padding="12"
                 Margin="0,8,0,0" Click="PlayFdmSequences_Click" />
         <TextBlock x:Name="FdmSequencesStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Tramas FDM simultáneas · datos de igual longitud (1–16 bits)" />
+        <TextBlock Text="Datos A:" />
+        <TextBox x:Name="FdmFrameATextBox" Text="10110010" Padding="8" TextChanged="FdmFrames_TextChanged" />
+        <TextBlock Text="Datos B:" Margin="0,8,0,0" />
+        <TextBox x:Name="FdmFrameBTextBox" Text="01001101" Padding="8" TextChanged="FdmFrames_TextChanged" />
+        <TextBlock x:Name="FdmFramesInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Button x:Name="PlayFdmFramesButton" Content="Reproducir ambas tramas" Padding="12" Margin="0,8,0,0" Click="PlayFdmFrames_Click" />
+        <TextBlock x:Name="FdmFramesStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · máximo 10 segundos" />
         <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
         <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />
@@ -84,6 +92,7 @@
         <TextBox x:Name="FdmDecodeStartTextBox" Text="0" Padding="8" />
         <TextBlock Text="Símbolos esperados por canal (1–16):" Margin="0,8,0,0" />
         <TextBox x:Name="FdmDecodeCountTextBox" Text="8" Padding="8" />
+        <CheckBox x:Name="FdmDecodeFramesCheckBox" Content="Incluir cabeceras de trama (la cantidad indicada corresponde a datos)" Margin="0,8,0,0" />
         <Button x:Name="DecodeFdmButton" Content="Decodificar ambas secuencias" IsEnabled="False"
                 Padding="8" Margin="0,8,0,0" Click="DecodeFdm_Click" />
         <TextBlock x:Name="FdmDecodedText" Text="Sin decodificación FDM." TextWrapping="Wrap" Margin="0,8,0,0" />

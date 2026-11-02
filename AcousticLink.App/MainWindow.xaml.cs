@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         UpdateFramePreview();
         UpdateFdmSequencesInfo();
+        UpdateFdmFramesInfo();
         captureTimer.Tick += (_, _) => RefreshCapture();
         captureTimer.Start();
     }
@@ -156,6 +157,40 @@ public partial class MainWindow : Window
         finally { SetPlaybackControls(true); }
     }
 
+    private void FdmFrames_TextChanged(object sender, TextChangedEventArgs e) => UpdateFdmFramesInfo();
+
+    private void UpdateFdmFramesInfo()
+    {
+        if (FdmFramesInfoText is null) return;
+        try
+        {
+            var frames = FdmBitstreamGenerator.BuildFrames(FdmFrameATextBox.Text, FdmFrameBTextBox.Text);
+            FdmFramesInfoText.Text = $"A · preámbulo: {BfskFrameBuilder.Preamble} · marcador: {BfskFrameBuilder.StartMarker} · datos: {FdmFrameATextBox.Text}\n" +
+                $"B · preámbulo: {BfskFrameBuilder.Preamble} · marcador: {BfskFrameBuilder.StartMarker} · datos: {FdmFrameBTextBox.Text}\n" +
+                $"{frames.ChannelA.Length} símbolos por canal · duración conjunta: {frames.ChannelA.Length * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s";
+        }
+        catch (ArgumentException ex) { FdmFramesInfoText.Text = ex.Message; }
+    }
+
+    private async void PlayFdmFrames_Click(object sender, RoutedEventArgs e)
+    {
+        string a = FdmFrameATextBox.Text, b = FdmFrameBTextBox.Text;
+        try { FdmBitstreamGenerator.ValidateSequences(a, b); }
+        catch (ArgumentException ex) { FdmFramesStatusText.Text = ex.Message; return; }
+        SetPlaybackControls(false);
+        FdmFramesStatusText.Text = "Reproduciendo ambas tramas...";
+        CancellationToken token = windowLifetime.Token;
+        try
+        {
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateFrames(a, b), token);
+            await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
+            FdmFramesStatusText.Text = "Reproducción de tramas FDM finalizada.";
+        }
+        catch (OperationCanceledException) when (closing) { }
+        catch (Exception ex) { FdmFramesStatusText.Text = ex.Message; ShowPlaybackError(ex); }
+        finally { SetPlaybackControls(true); }
+    }
+
     private void BitSequenceTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (SequenceInfoText is null)
@@ -197,6 +232,9 @@ public partial class MainWindow : Window
         FdmSequenceATextBox.IsEnabled = enabled;
         FdmSequenceBTextBox.IsEnabled = enabled;
         PlayFdmSequencesButton.IsEnabled = enabled;
+        FdmFrameATextBox.IsEnabled = enabled;
+        FdmFrameBTextBox.IsEnabled = enabled;
+        PlayFdmFramesButton.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)
@@ -426,8 +464,14 @@ public partial class MainWindow : Window
         FdmDecodedText.Text = "Decodificando FDM...";
         try
         {
-            var result = await Task.Run(() => new FdmSequenceDecoder()
-                .Decode(recording.GetSamples(), recording.SampleRate, start, count));
+            bool frames = FdmDecodeFramesCheckBox.IsChecked == true;
+            var result = await Task.Run(() =>
+            {
+                var decoder = new FdmSequenceDecoder();
+                float[] samples = recording.GetSamples();
+                return frames ? decoder.DecodeFrameSymbols(samples, recording.SampleRate, start, count)
+                    : decoder.Decode(samples, recording.SampleRate, start, count);
+            });
             if (closing) return;
             static string Describe(string name, BfskSequenceResult channel) =>
                 $"Canal {name}: {channel.Bits}\nConcluyentes: {channel.ConclusiveCount} · no concluyentes: {channel.InconclusiveCount} · " +
