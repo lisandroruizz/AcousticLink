@@ -31,13 +31,13 @@ public sealed class BfskToneGenerator
 
     // La misma generación con fase continua para las bandas A/B; API pública BFSK intacta.
     internal float[] GenerateSequence(string bits, double frequency0, double frequency1,
-        double bitDurationSeconds, double amplitude)
+        double bitDurationSeconds, double amplitude, int maximumBits = MaximumSequenceLength)
     {
         ArgumentNullException.ThrowIfNull(bits);
         if (bits.Length == 0)
             throw new ArgumentException("La secuencia no puede estar vacía.", nameof(bits));
-        if (bits.Length > MaximumSequenceLength)
-            throw new ArgumentException($"La secuencia no puede superar {MaximumSequenceLength} bits.", nameof(bits));
+        if (bits.Length > maximumBits)
+            throw new ArgumentException($"La secuencia no puede superar {maximumBits} bits.", nameof(bits));
 
         var frequencies = new double[bits.Length];
         for (int i = 0; i < bits.Length; i++)

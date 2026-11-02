@@ -1,3 +1,5 @@
+using AcousticLink.App.Protocol;
+
 namespace AcousticLink.App.Signals;
 
 public sealed class FdmBitstreamGenerator
@@ -29,14 +31,21 @@ public sealed class FdmBitstreamGenerator
         return GenerateCore(frames.ChannelA, frames.ChannelB);
     }
 
-    private float[] GenerateCore(string bitsA, string bitsB)
+    public float[] GenerateTextFrames(string textA, string textB)
+    {
+        var frames = new FdmTextFrameBuilder().Build(textA, textB);
+        return GenerateCore(frames.ChannelA.TransmittedBits, frames.ChannelB.TransmittedBits,
+            FdmTextFrameBuilder.MaximumFrameBits);
+    }
+
+    private float[] GenerateCore(string bitsA, string bitsB, int maximumBits = BfskToneGenerator.MaximumSequenceLength)
     {
         double perChannelAmplitude = FdmToneMixer.MaximumAmplitude / 2;
         // Cada llamada conserva su propio acumulador de fase y usa una envolvente global.
         float[] a = generator.GenerateSequence(bitsA, FdmToneMixer.ChannelABit0Frequency,
-            FdmToneMixer.ChannelABit1Frequency, SymbolDurationSeconds, perChannelAmplitude);
+            FdmToneMixer.ChannelABit1Frequency, SymbolDurationSeconds, perChannelAmplitude, maximumBits);
         float[] b = generator.GenerateSequence(bitsB, FdmToneMixer.ChannelBBit0Frequency,
-            FdmToneMixer.ChannelBBit1Frequency, SymbolDurationSeconds, perChannelAmplitude);
+            FdmToneMixer.ChannelBBit1Frequency, SymbolDurationSeconds, perChannelAmplitude, maximumBits);
         return FdmToneMixer.MixInPlace(a, b);
     }
 

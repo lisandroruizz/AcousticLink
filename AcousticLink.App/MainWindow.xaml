@@ -52,6 +52,14 @@
         <TextBlock x:Name="FdmFramesInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <Button x:Name="PlayFdmFramesButton" Content="Reproducir ambas tramas" Padding="12" Margin="0,8,0,0" Click="PlayFdmFrames_Click" />
         <TextBlock x:Name="FdmFramesStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Emisor" />
+        <TextBlock Text="Texto A (1–8 bytes UTF-8):" />
+        <TextBox x:Name="FdmTextATextBox" Text="Hola" Padding="8" TextChanged="FdmText_TextChanged" />
+        <TextBlock Text="Texto B (1–8 bytes UTF-8):" Margin="0,8,0,0" />
+        <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Padding="8" TextChanged="FdmText_TextChanged" />
+        <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Button x:Name="TransmitFdmTextButton" Content="Transmitir ambos mensajes" Padding="12" Margin="0,8,0,0" Click="TransmitFdmText_Click" />
+        <TextBlock x:Name="FdmTextStatusText" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · duración máxima de la nueva captura" />
         <ComboBox x:Name="CaptureDurationComboBox" SelectedIndex="0" Margin="0,0,0,8">
             <ComboBoxItem Content="10 segundos" Tag="10" />

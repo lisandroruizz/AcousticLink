@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using AcousticLink.App.Audio;
 using AcousticLink.App.Signals;
+using AcousticLink.App.Protocol;
 
 namespace AcousticLink.App;
 
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
         UpdateFramePreview();
         UpdateFdmSequencesInfo();
         UpdateFdmFramesInfo();
+        UpdateFdmTextInfo();
         captureTimer.Tick += (_, _) => RefreshCapture();
         captureTimer.Start();
     }
@@ -192,6 +194,40 @@ public partial class MainWindow : Window
         finally { SetPlaybackControls(true); }
     }
 
+    private void FdmText_TextChanged(object sender, TextChangedEventArgs e) => UpdateFdmTextInfo();
+
+    private void UpdateFdmTextInfo()
+    {
+        if (FdmTextInfoText is null) return;
+        try
+        {
+            var frames = new FdmTextFrameBuilder().Build(FdmTextATextBox.Text, FdmTextBTextBox.Text);
+            FdmTextInfoText.Text = $"A: {frames.ChannelA.Utf8ByteCount} bytes UTF-8 · {frames.ChannelA.RealBitCount} bits reales · {frames.ChannelA.PaddingBitCount} bits de relleno\n" +
+                $"B: {frames.ChannelB.Utf8ByteCount} bytes UTF-8 · {frames.ChannelB.RealBitCount} bits reales · {frames.ChannelB.PaddingBitCount} bits de relleno\n" +
+                $"Total: {frames.TotalSymbols} símbolos · duración conjunta: {frames.TotalSymbols * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s";
+        }
+        catch (ArgumentException ex) { FdmTextInfoText.Text = ex.Message; }
+    }
+
+    private async void TransmitFdmText_Click(object sender, RoutedEventArgs e)
+    {
+        string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text;
+        try { _ = new FdmTextFrameBuilder().Build(a, b); }
+        catch (ArgumentException ex) { FdmTextStatusText.Text = ex.Message; return; }
+        SetPlaybackControls(false);
+        FdmTextStatusText.Text = "Transmitiendo ambos mensajes...";
+        CancellationToken token = windowLifetime.Token;
+        try
+        {
+            float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b), token);
+            await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
+            FdmTextStatusText.Text = "Reproducción de mensajes finalizada (recepción aún no verificada).";
+        }
+        catch (OperationCanceledException) when (closing) { }
+        catch (Exception ex) { FdmTextStatusText.Text = ex.Message; ShowPlaybackError(ex); }
+        finally { SetPlaybackControls(true); }
+    }
+
     private void BitSequenceTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (SequenceInfoText is null)
@@ -236,6 +272,9 @@ public partial class MainWindow : Window
         FdmFrameATextBox.IsEnabled = enabled;
         FdmFrameBTextBox.IsEnabled = enabled;
         PlayFdmFramesButton.IsEnabled = enabled;
+        FdmTextATextBox.IsEnabled = enabled;
+        FdmTextBTextBox.IsEnabled = enabled;
+        TransmitFdmTextButton.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)
