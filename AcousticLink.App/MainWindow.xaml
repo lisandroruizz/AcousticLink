@@ -73,6 +73,8 @@
         <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
         <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />
         <Button x:Name="SaveCaptureButton" Content="Guardar WAV" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="SaveCapture_Click" />
+        <Button x:Name="LoadWavButton" Content="Cargar grabación WAV" Padding="8" Margin="0,8,0,0" Click="LoadWav_Click" />
+        <TextBlock x:Name="AudioSourceText" Text="Sin audio seleccionado." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock x:Name="CaptureStatusText" Text="Micrófono detenido." TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock x:Name="CaptureFormatText" TextWrapping="Wrap" />
         <TextBlock x:Name="CaptureMetricsText" Text="Duración: 0 s · pico: 0" />

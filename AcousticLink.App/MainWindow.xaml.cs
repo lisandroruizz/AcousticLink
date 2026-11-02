@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly AudioPlaybackService playback = new();
     private readonly CancellationTokenSource windowLifetime = new();
     private readonly AudioCaptureService capture = new();
+    private readonly AudioRecordingSelection audioSelection = new();
     private readonly System.Windows.Threading.DispatcherTimer captureTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private bool closing;
     private bool closeReady;
@@ -302,6 +303,7 @@ public partial class MainWindow : Window
         {
             int seconds = int.Parse((string)((ComboBoxItem)CaptureDurationComboBox.SelectedItem).Tag);
             await capture.StartAsync(seconds);
+            if (capture.Recording is { } started) audioSelection.SelectMicrophone(started, capture.FormatDescription);
         }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo iniciar el micrófono: {ex.Message}"; }
         captureBusy = false;
@@ -320,10 +322,11 @@ public partial class MainWindow : Window
     private void RefreshCapture()
     {
         if (closing) return;
-        StartCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy;
+        StartCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
+        LoadWavButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
         StopCaptureButton.IsEnabled = capture.IsRecording && !captureBusy;
         CaptureDurationComboBox.IsEnabled = !capture.IsRecording && !captureBusy;
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
         AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
@@ -334,13 +337,15 @@ public partial class MainWindow : Window
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         UseHammingReceiveCheckBox.IsEnabled = !analyzing;
-        CaptureFormatText.Text = capture.FormatDescription;
+        AudioSourceText.Text = audioSelection.Current?.Source ?? "Sin audio seleccionado.";
+        CaptureFormatText.Text = audioSelection.Current?.FormatDescription ?? "Sin formato seleccionado.";
         if (recording is not null)
         {
             var details = recording.GetMetrics();
             CaptureMetricsText.Text = $"Duración: {details.DurationSeconds:0.00} / {recording.MaximumDurationSeconds} s · {details.Count} muestras · RMS: {details.Rms:0.0000} · pico: {details.Peak:0.0000}";
         }
-        if (capture.Error is not null) CaptureStatusText.Text = $"Error del micrófono: {capture.Error}";
+        if (capture.Error is not null && ReferenceEquals(recording, capture.Recording) && wasCaptureRecording)
+            CaptureStatusText.Text = $"Error del micrófono: {capture.Error}";
         else if (capture.IsRecording) CaptureStatusText.Text = "Grabando micrófono...";
         else if (recording is not null && wasCaptureRecording)
             CaptureStatusText.Text = recording.GetMetrics().StopReason switch
@@ -354,9 +359,28 @@ public partial class MainWindow : Window
         wasCaptureRecording = capture.IsRecording;
     }
 
+    private async void LoadWav_Click(object sender, RoutedEventArgs e)
+    {
+        if (capture.IsRecording || captureBusy || analyzing) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Grabaciones WAV (*.wav)|*.wav", CheckFileExists = true, Multiselect = false };
+        if (dialog.ShowDialog(this) != true) return;
+        analyzing = true;
+        RefreshCapture();
+        CaptureStatusText.Text = "Importando WAV...";
+        CancellationToken token = windowLifetime.Token;
+        try
+        {
+            await Task.Run(() => audioSelection.ImportWav(dialog.FileName, token), token);
+            if (!closing) CaptureStatusText.Text = "WAV importado. Elegí la herramienta de análisis y la modalidad Hamming correspondiente.";
+        }
+        catch (OperationCanceledException) { if (!closing) CaptureStatusText.Text = "Importación cancelada; se conserva la selección anterior."; }
+        catch (Exception ex) { if (!closing) CaptureStatusText.Text = $"No se pudo cargar el WAV; se conserva el audio anterior. {ex.Message}"; }
+        finally { analyzing = false; RefreshCapture(); }
+    }
+
     private async void SaveCapture_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null) return;
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "Audio WAV (*.wav)|*.wav", FileName = "captura.wav" };
         if (dialog.ShowDialog(this) != true) return;
@@ -370,7 +394,7 @@ public partial class MainWindow : Window
 
     private async void AnalyzeTone_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         if (!double.TryParse(AnalysisStartTextBox.Text, out double startSeconds) ||
             !double.IsFinite(startSeconds) || startSeconds < 0)
@@ -413,7 +437,7 @@ public partial class MainWindow : Window
 
     private async void DecodeSequence_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         if (!double.TryParse(SequenceStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0 ||
             !int.TryParse(SequenceBitCountTextBox.Text, out int count) || count < 1 || count > BfskSequenceDecoder.MaximumBits)
@@ -451,7 +475,7 @@ public partial class MainWindow : Window
 
     private async void Synchronize_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         if (!int.TryParse(SyncBitCountTextBox.Text, out int count) || count < 1 || count > BfskFrameBuilder.MaximumDataBits)
         {
@@ -482,7 +506,7 @@ public partial class MainWindow : Window
 
     private async void AnalyzeFdm_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         if (!double.TryParse(FdmAnalysisStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0)
         {
@@ -516,7 +540,7 @@ public partial class MainWindow : Window
 
     private async void DecodeFdm_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         FdmDiagnosticsText.Clear();
         if (!double.TryParse(FdmDecodeStartTextBox.Text, out double start) || !double.IsFinite(start) || start < 0 ||
@@ -559,7 +583,7 @@ public partial class MainWindow : Window
 
     private async void SynchronizeFdm_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         if (!int.TryParse(FdmSyncCountTextBox.Text, out int count) || count < 1 || count > BfskFrameBuilder.MaximumDataBits)
         {
@@ -605,7 +629,7 @@ public partial class MainWindow : Window
 
     private async void ReceiveFdmText_Click(object sender, RoutedEventArgs e)
     {
-        var recording = capture.Recording;
+        var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         analyzing = true;
         RefreshCapture();

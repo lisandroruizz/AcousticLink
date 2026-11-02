@@ -2,7 +2,7 @@ using NAudio.Wave;
 
 namespace AcousticLink.App.Audio;
 
-public enum CaptureStopReason { None, Manual, DurationLimit, ApplicationClosing, DeviceStopped, Error }
+public enum CaptureStopReason { None, Manual, DurationLimit, ApplicationClosing, DeviceStopped, Error, Imported }
 
 // Buffer acotado: los canales de entrada se promedian explícitamente a mono.
 public sealed class CapturedAudio
@@ -30,6 +30,22 @@ public sealed class CapturedAudio
         InputChannels = inputChannels;
         MaximumDurationSeconds = maximumDurationSeconds;
         samples = new float[checked(sampleRate * maximumDurationSeconds)];
+    }
+
+    // Toma posesión del arreglo privado del importador: no convierte ni copia las muestras.
+    internal CapturedAudio(float[] importedSamples, int sampleRate)
+    {
+        SampleRate = sampleRate;
+        InputChannels = 1;
+        MaximumDurationSeconds = MaximumSeconds;
+        samples = importedSamples;
+        count = samples.Length;
+        stopReason = CaptureStopReason.Imported;
+        foreach (float value in samples)
+        {
+            peak = Math.Max(peak, Math.Abs(value));
+            sumSquares += (double)value * value;
+        }
     }
 
     public static void ValidateDuration(int seconds)
