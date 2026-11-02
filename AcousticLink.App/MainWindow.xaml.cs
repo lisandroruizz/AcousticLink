@@ -322,6 +322,7 @@ public partial class MainWindow : Window
             if (capture.Recording is { } started)
             {
                 audioSelection.SelectMicrophone(started, capture.FormatDescription);
+                InvalidateAudioAnalysis();
                 ExperimentProfileComboBox.SelectedIndex = 0;
             }
         }
@@ -337,6 +338,25 @@ public partial class MainWindow : Window
         await capture.StopAsync();
         captureBusy = false;
         RefreshCapture();
+    }
+
+    // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
+    private void InvalidateAudioAnalysis()
+    {
+        const string pending = "Audio seleccionado cambiado. Pendiente de analizar esta grabación.";
+        AnalysisResultText.Text = pending;
+        DecodedSequenceText.Text = pending;
+        SequenceDiagnosticsText.Clear();
+        SynchronizationText.Text = pending;
+        FdmDetectionText.Text = pending;
+        FdmDecodedText.Text = pending;
+        FdmDiagnosticsText.Clear();
+        FdmSyncResultText.Text = pending;
+        ReceivedFdmText.Text = pending;
+        lastExperiment = null;
+        ExperimentSummaryText.Text = "Audio seleccionado cambiado. Realizá una nueva medición antes de exportar CSV.";
+        ExperimentDetailsText.Clear();
+        ExportExperimentButton.IsEnabled = false;
     }
 
     private void RefreshCapture()
@@ -401,6 +421,7 @@ public partial class MainWindow : Window
             await Task.Run(() => audioSelection.ImportWav(dialog.FileName, token), token);
             if (!closing)
             {
+                InvalidateAudioAnalysis();
                 // Un nuevo archivo no hereda la declaración de perfil de la grabación anterior.
                 ExperimentProfileComboBox.SelectedIndex = 0;
                 CaptureStatusText.Text = "WAV importado. Elegí la herramienta de análisis y la modalidad Hamming correspondiente.";
@@ -774,15 +795,15 @@ public partial class MainWindow : Window
     private async void ExportExperiment_Click(object sender, RoutedEventArgs e)
     {
         var result = lastExperiment;
-        if (result is null || analyzing) return;
+        if (result is null || analyzing || capture.IsRecording || captureBusy) return;
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "Resultados CSV (*.csv)|*.csv", FileName = "medicion-fdm.csv" };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
             await Task.Run(() => FdmExperimentCsv.Save(dialog.FileName, result));
-            if (!closing) ExperimentSummaryText.Text += $"\nCSV guardado: {dialog.FileName}";
+            if (!closing && ReferenceEquals(lastExperiment, result)) ExperimentSummaryText.Text += $"\nCSV guardado: {dialog.FileName}";
         }
-        catch (Exception ex) { if (!closing) ExperimentSummaryText.Text += $"\nNo se pudo guardar CSV: {ex.Message}"; }
+        catch (Exception ex) { if (!closing && ReferenceEquals(lastExperiment, result)) ExperimentSummaryText.Text += $"\nNo se pudo guardar CSV: {ex.Message}"; }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
