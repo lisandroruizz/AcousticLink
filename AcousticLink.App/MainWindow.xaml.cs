@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private bool captureBusy;
     private bool wasCaptureRecording;
     private bool analyzing;
+    private bool playing;
     private CancellationTokenSource? fdmSyncCancellation;
     private CancellationTokenSource? textReceiveCancellation;
     private CancellationTokenSource? experimentCancellation;
@@ -280,6 +281,7 @@ public partial class MainWindow : Window
 
     private void SetPlaybackControls(bool enabled)
     {
+        playing = !enabled;
         FdmProfileComboBox.IsEnabled = enabled;
         Bit0Button.IsEnabled = enabled;
         Bit1Button.IsEnabled = enabled;
@@ -353,6 +355,12 @@ public partial class MainWindow : Window
         FdmDiagnosticsText.Clear();
         FdmSyncResultText.Text = pending;
         ReceivedFdmText.Text = pending;
+        ReceivedChannelAText.Text = "Sin analizar";
+        ReceivedChannelBText.Text = "Sin analizar";
+        ReceivedChannelAText.Foreground = System.Windows.Media.Brushes.LightGray;
+        ReceivedChannelBText.Foreground = System.Windows.Media.Brushes.LightGray;
+        ExperimentChannelAText.Text = "Sin analizar";
+        ExperimentChannelBText.Text = "Sin analizar";
         lastExperiment = null;
         ExperimentSummaryText.Text = "Audio seleccionado cambiado. Realizá una nueva medición antes de exportar CSV.";
         ExperimentDetailsText.Clear();
@@ -362,6 +370,9 @@ public partial class MainWindow : Window
     private void RefreshCapture()
     {
         if (closing) return;
+        GeneralStateText.Text = captureBusy ? "Operando micrófono…" : capture.IsRecording ? "Capturando audio"
+            : analyzing ? "Procesando audio…" : playing ? "Reproduciendo audio"
+            : audioSelection.Current is null ? "Sin audio seleccionado" : "Audio seleccionado · sin operación activa";
         StartCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
         LoadWavButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
         StopCaptureButton.IsEnabled = capture.IsRecording && !captureBusy;
@@ -691,6 +702,10 @@ public partial class MainWindow : Window
         textReceiveCancellation = cancellation;
         CancelReceiveFdmTextButton.IsEnabled = true;
         ReceivedFdmText.Text = "Buscando cabeceras y recuperando mensajes...";
+        ReceivedChannelAText.Text = "Sin resultado · análisis en curso";
+        ReceivedChannelBText.Text = "Sin resultado · análisis en curso";
+        ReceivedChannelAText.Foreground = System.Windows.Media.Brushes.LightGray;
+        ReceivedChannelBText.Foreground = System.Windows.Media.Brushes.LightGray;
         bool useHamming = UseHammingReceiveCheckBox.IsChecked == true;
         bool recoverErasures = useHamming && RecoverReceiveErasuresCheckBox.IsChecked == true;
         try
@@ -717,12 +732,24 @@ public partial class MainWindow : Window
             }
             ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
                 result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+            void ShowChannel(TextBlock target, FdmTextChannelResult channel)
+            {
+                target.Text = $"Sincronización: {result.Synchronization.State} · cabecera {(channel.HeaderValid ? "válida" : "no validada")}\n" +
+                    $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")} · bytes: {channel.ByteLength?.ToString() ?? "?"}\n" +
+                    (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason;
+                target.Foreground = channel.State == FdmTextReceiveState.Valid ? System.Windows.Media.Brushes.LightGreen
+                    : channel.CrcValid is false ? System.Windows.Media.Brushes.Salmon : System.Windows.Media.Brushes.Khaki;
+            }
+            ShowChannel(ReceivedChannelAText, result.ChannelA);
+            ShowChannel(ReceivedChannelBText, result.ChannelB);
         }
         catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; }
         catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; }
         finally
         {
             textReceiveCancellation = null;
+            if (ReceivedChannelAText.Text == "Sin resultado · análisis en curso")
+                ReceivedChannelAText.Text = ReceivedChannelBText.Text = "Sin resultado nuevo. " + ReceivedFdmText.Text;
             CancelReceiveFdmTextButton.IsEnabled = false;
             analyzing = false;
             RefreshCapture();
@@ -741,6 +768,8 @@ public partial class MainWindow : Window
         FdmAmplitudeProfile? declaredProfile = (ExperimentProfileComboBox.SelectedItem as FdmAmplitudeSetting)?.Profile;
         lastExperiment = null;
         ExperimentDetailsText.Clear();
+        ExperimentChannelAText.Text = "Sin resultado · medición en curso";
+        ExperimentChannelBText.Text = "Sin resultado · medición en curso";
         analyzing = true;
         RefreshCapture();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
@@ -776,7 +805,9 @@ public partial class MainWindow : Window
                 (result.DeclaredAmplitudeProfile.HasValue ? FdmAmplitudeProfiles.Get(result.DeclaredAmplitudeProfile.Value).Label : "no informado") +
                 $"\n{result.SampleRate} Hz · {result.AudioDurationSeconds:0.000} s · " +
                 (result.UsesHamming ? $"recuperación de borrados {(result.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")} · " : "") +
-                $"sincronización {result.Synchronization.State}\n{ChannelSummary(result.ChannelA)}\n\n{ChannelSummary(result.ChannelB)}";
+                $"sincronización {result.Synchronization.State}";
+            ExperimentChannelAText.Text = ChannelSummary(result.ChannelA);
+            ExperimentChannelBText.Text = ChannelSummary(result.ChannelB);
             ExperimentDetailsText.Text = result.Synchronization.Reason + "\n" + string.Join("\n\n", new[] { result.ChannelA, result.ChannelB }.Select(c =>
                 $"Canal {c.Channel}: {c.Diagnostic}\nReferencia original: {c.OriginalReferenceBits}\nReferencia transmitida: {c.TransmittedReferenceBits}\n" +
                 $"Recibidos: {c.Before?.ObservedBits ?? "no evaluables"}\nReconstruidos: {c.After?.ObservedBits ?? "no corresponde/no evaluables"}"));
@@ -786,6 +817,8 @@ public partial class MainWindow : Window
         finally
         {
             experimentCancellation = null;
+            if (lastExperiment is null)
+                ExperimentChannelAText.Text = ExperimentChannelBText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
             CancelExperimentButton.IsEnabled = false;
             analyzing = false;
             RefreshCapture();
