@@ -1,4 +1,4 @@
-<Window x:Class="AcousticLink.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local="clr-namespace:AcousticLink.App" mc:Ignorable="d" Title="AcousticLink — Módem acústico BFSK / FDM" Height="850" Width="1180" MinHeight="600" MinWidth="820" Background="{StaticResource PageBrush}" Foreground="#E5EDF7" FontFamily="Segoe UI" FontSize="14" WindowStartupLocation="CenterScreen">
+<Window x:Class="AcousticLink.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local="clr-namespace:AcousticLink.App" xmlns:visual="clr-namespace:AcousticLink.App.Visualization" mc:Ignorable="d" Title="AcousticLink — Módem acústico BFSK / FDM" Height="740" Width="1180" MinHeight="600" MinWidth="820" Background="{StaticResource PageBrush}" Foreground="#E5EDF7" FontFamily="Segoe UI" FontSize="14" WindowStartupLocation="CenterScreen">
   <Grid Margin="24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -18,7 +18,7 @@
         <TextBlock x:Name="GeneralStateText" Text="Sin audio seleccionado" />
       </Border>
     </Grid>
-    <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" SelectedIndex="0">
+    <TabControl x:Name="MainSectionsTabs" Grid.Row="1" Background="Transparent" BorderThickness="0" SelectedIndex="0">
       <TabItem Header="Panel general">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="0,8,12,0">
@@ -196,44 +196,19 @@
       <TabItem Header="Receptor">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="0,8,12,0">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition />
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition />
-              </Grid.ColumnDefinitions>
-              <Border Grid.Column="0" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelABrush}">
-                <StackPanel>
-                  <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · duración máxima de la nueva captura" />
-                  <ComboBox x:Name="CaptureDurationComboBox" SelectedIndex="0" Margin="0,0,0,8">
-                    <ComboBoxItem Content="10 segundos" Tag="10" />
-                    <ComboBoxItem Content="20 segundos" Tag="20" />
-                    <ComboBoxItem Content="30 segundos" Tag="30" />
-                  </ComboBox>
-                  <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
-                  <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />
-                  <Button x:Name="SaveCaptureButton" Content="Guardar WAV" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="SaveCapture_Click" />
-                  <Button x:Name="LoadWavButton" Content="Cargar grabación WAV" Padding="8" Margin="0,8,0,0" Click="LoadWav_Click" />
-                  <TextBlock x:Name="AudioSourceText" Text="Sin audio seleccionado." TextWrapping="Wrap" Margin="0,8,0,0" />
-                  <TextBlock x:Name="CaptureStatusText" Text="Micrófono detenido." TextWrapping="Wrap" Margin="0,8,0,0" />
-                  <TextBlock x:Name="CaptureFormatText" TextWrapping="Wrap" />
-                  <TextBlock x:Name="CaptureMetricsText" Text="Duración: 0 s · pico: 0" />
-                </StackPanel>
-              </Border>
-              <Border Grid.Column="2" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelBBrush}">
-                <StackPanel>
-                  <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Receptor" />
-                  <CheckBox x:Name="UseHammingReceiveCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Margin="0,8,0,8" />
-                  <CheckBox x:Name="RecoverReceiveErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,0,0,8" />
-                  <TextBlock Text="Seleccionar el mismo modo que el emisor. Las inversiones Hamming son intentos; la integridad se comprueba con CRC." TextWrapping="Wrap" Margin="0,0,0,8" />
-                  <Button x:Name="ReceiveFdmTextButton" Content="Recibir mensajes de la última grabación" IsEnabled="False" Padding="8" Click="ReceiveFdmText_Click" />
-                  <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar recepción" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelReceiveFdmText_Click" />
-                  <Expander Header="Diagnóstico completo de recepción" Margin="0,12,0,0">
-                    <TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto." TextWrapping="Wrap" Margin="0,8,0,0" />
-                  </Expander>
-                </StackPanel>
-              </Border>
-            </Grid>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Text="Señal acústica recibida" Style="{StaticResource Heading}" />
+                <TextBlock x:Name="WaveformInfoText" Text="Sin señal disponible" />
+                <ComboBox x:Name="WaveformScaleComboBox" SelectedIndex="1" SelectionChanged="WaveformScale_Changed" Margin="0,8">
+                  <ComboBoxItem Content="Escala original ±1" />
+                  <ComboBoxItem Content="Ajustar visualización" />
+                </ComboBox>
+                <TextBlock x:Name="WaveformScaleText" Text="Ajuste solo visual · no modifica las muestras" />
+                <visual:WaveformView x:Name="ReceivedWaveform" />
+                <TextBlock Text="Amplitud de muestras respecto del tiempo · envolvente mínima/máxima. No clasifica silencio ni actividad." Foreground="#AABBD0" />
+              </StackPanel>
+            </Border>
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition />
@@ -243,153 +218,91 @@
               <Border Grid.Column="0" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelABrush}">
                 <StackPanel>
                   <TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" />
-                  <TextBlock x:Name="ReceivedChannelAText" Text="Sin analizar" Margin="0,8,0,0" />
+                  <visual:ReceptionView x:Name="ReceptionAView" />
+                  <Expander Header="Resumen textual">
+                    <TextBlock x:Name="ReceivedChannelAText" Text="Sin analizar" Margin="0,8,0,0" />
+                  </Expander>
                 </StackPanel>
               </Border>
               <Border Grid.Column="2" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelBBrush}">
                 <StackPanel>
                   <TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" />
-                  <TextBlock x:Name="ReceivedChannelBText" Text="Sin analizar" Margin="0,8,0,0" />
+                  <visual:ReceptionView x:Name="ReceptionBView" />
+                  <Expander Header="Resumen textual">
+                    <TextBlock x:Name="ReceivedChannelBText" Text="Sin analizar" Margin="0,8,0,0" />
+                  </Expander>
                 </StackPanel>
               </Border>
             </Grid>
+            <Border Style="{StaticResource Card}" Padding="14">
+              <StackPanel>
+                <TextBlock Text="Explorador de trama recibida" Style="{StaticResource Heading}" />
+                <visual:FrameExplorerView x:Name="ReceivedFrameExplorer" />
+              </StackPanel>
+            </Border>
+            <Button Content="Abrir Análisis · mapa de bits comparado" Click="OpenAnalysis_Click" Margin="0,0,0,8" />
+            <Expander Header="Captura, WAV y opciones de recepción" IsExpanded="False">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition />
+                  <ColumnDefinition Width="16" />
+                  <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelABrush}">
+                  <StackPanel>
+                    <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Micrófono · duración máxima de la nueva captura" />
+                    <ComboBox x:Name="CaptureDurationComboBox" SelectedIndex="0" Margin="0,0,0,8">
+                      <ComboBoxItem Content="10 segundos" Tag="10" />
+                      <ComboBoxItem Content="20 segundos" Tag="20" />
+                      <ComboBoxItem Content="30 segundos" Tag="30" />
+                    </ComboBox>
+                    <Button x:Name="StartCaptureButton" Content="Iniciar grabación" Padding="8" Click="StartCapture_Click" />
+                    <Button x:Name="StopCaptureButton" Content="Detener grabación" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="StopCapture_Click" />
+                    <Button x:Name="SaveCaptureButton" Content="Guardar WAV" Padding="8" Margin="0,8,0,0" IsEnabled="False" Click="SaveCapture_Click" />
+                    <Button x:Name="LoadWavButton" Content="Cargar grabación WAV" Padding="8" Margin="0,8,0,0" Click="LoadWav_Click" />
+                    <TextBlock x:Name="AudioSourceText" Text="Sin audio seleccionado." TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <TextBlock x:Name="CaptureStatusText" Text="Micrófono detenido." TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <TextBlock x:Name="CaptureFormatText" TextWrapping="Wrap" />
+                    <TextBlock x:Name="LiveCaptureText" Text="Sin captura activa" />
+                    <ProgressBar x:Name="CaptureProgressBar" Minimum="0" Maximum="1" Value="0" Height="8" Margin="0,8" />
+                    <ProgressBar x:Name="CaptureRmsBar" Minimum="0" Maximum="1" Value="0" Height="12" Margin="0,8" />
+                    <TextBlock Text="RMS acumulado de la captura actual · escala 0–1 · no es nivel instantáneo" Foreground="#AABBD0" />
+                    <TextBlock x:Name="CaptureMetricsText" Text="Duración: 0 s · pico: 0" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelBBrush}">
+                  <StackPanel>
+                    <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mensajes FDM — Receptor" />
+                    <CheckBox x:Name="UseHammingReceiveCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Margin="0,8,0,8" />
+                    <CheckBox x:Name="RecoverReceiveErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,0,0,8" />
+                    <TextBlock Text="Seleccionar el mismo modo que el emisor. Las inversiones Hamming son intentos; la integridad se comprueba con CRC." TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <Button x:Name="ReceiveFdmTextButton" Content="Recibir mensajes de la última grabación" IsEnabled="False" Padding="8" Click="ReceiveFdmText_Click" />
+                    <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar recepción" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelReceiveFdmText_Click" />
+                    <Expander Header="Diagnóstico completo de recepción" Margin="0,12,0,0">
+                      <TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto." TextWrapping="Wrap" Margin="0,8,0,0" />
+                    </Expander>
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </Expander>
           </StackPanel>
         </ScrollViewer>
       </TabItem>
       <TabItem Header="Análisis">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="0,8,12,0">
-            <Border Style="{StaticResource Card}">
-              <StackPanel>
-                <TextBlock Text="Fuente analizada" Style="{StaticResource Heading}" />
-                <TextBlock Text="{Binding Text, ElementName=AudioSourceText}" />
-                <TextBlock Text="{Binding Text, ElementName=CaptureFormatText}" />
-                <TextBlock Text="{Binding Text, ElementName=CaptureMetricsText}" />
-                <TextBlock Text="Opciones independientes del Receptor: seleccioná aquí Hamming y recuperación de borrados para esta medición." Foreground="#FFCE75" Margin="0,8,0,0" />
-              </StackPanel>
-            </Border>
-            <Border Style="{StaticResource Card}">
-              <StackPanel>
-                <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Mediciones experimentales FDM" />
-                <TextBlock Text="Referencias conocidas realmente transmitidas. Cabeceras y relleno se excluyen de la BER." TextWrapping="Wrap" />
-                <TextBlock Text="Mensaje original esperado A:" Margin="0,8,0,0" />
-                <TextBox x:Name="ExperimentExpectedATextBox" Text="Hola" Padding="8" />
-                <TextBlock Text="Mensaje original esperado B:" Margin="0,8,0,0" />
-                <TextBox x:Name="ExperimentExpectedBTextBox" Text="Mundo" Padding="8" />
-                <CheckBox x:Name="ExperimentHammingCheckBox" Content="Transmisión con Hamming (7,4)" IsChecked="False" Margin="0,8,0,0" />
-                <CheckBox x:Name="RecoverExperimentErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,8,0,0" />
-                <TextBlock Text="Perfil utilizado al transmitir (declaración manual, no medición del receptor):" TextWrapping="Wrap" Margin="0,8,0,0" />
-                <ComboBox x:Name="ExperimentProfileComboBox" Margin="0,4,0,0" />
-                <Button x:Name="AnalyzeExperimentButton" Content="Medir grabación seleccionada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeExperiment_Click" />
-                <Button x:Name="CancelExperimentButton" Content="Cancelar medición" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelExperiment_Click" />
-                <Button x:Name="ExportExperimentButton" Content="Exportar medición a CSV" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="ExportExperiment_Click" />
-                <TextBlock x:Name="ExperimentSummaryText" Text="Sin mediciones." TextWrapping="Wrap" Margin="0,8,0,0" />
-                <Expander Header="Detalles y referencias de la última medición" Margin="0,8,0,0">
-                  <TextBox x:Name="ExperimentDetailsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="250" VerticalScrollBarVisibility="Auto" />
-                </Expander>
-              </StackPanel>
-            </Border>
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition />
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition />
-              </Grid.ColumnDefinitions>
-              <Border Grid.Column="0" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelABrush}">
-                <StackPanel>
-                  <TextBlock Text="CANAL A · MÉTRICAS" Foreground="{StaticResource ChannelABrush}" />
-                  <TextBlock x:Name="ExperimentChannelAText" Text="Sin analizar" />
-                </StackPanel>
-              </Border>
-              <Border Grid.Column="2" Style="{StaticResource Card}" BorderBrush="{StaticResource ChannelBBrush}">
-                <StackPanel>
-                  <TextBlock Text="CANAL B · MÉTRICAS" Foreground="{StaticResource ChannelBBrush}" />
-                  <TextBlock x:Name="ExperimentChannelBText" Text="Sin analizar" />
-                </StackPanel>
-              </Border>
-            </Grid>
-            <Expander Header="Herramientas de diagnóstico manual">
-              <Border Style="{StaticResource Card}">
-                <StackPanel>
-                  <Expander Header="Tono BFSK">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Analizar tono BFSK · ventana de 0,10 s" />
-                        <TextBlock Text="Instante inicial de la ventana (segundos):" />
-                        <TextBox x:Name="AnalysisStartTextBox" Text="0" Padding="8" />
-                        <Button x:Name="AnalyzeToneButton" Content="Analizar grabación finalizada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeTone_Click" />
-                        <TextBlock x:Name="AnalysisResultText" TextWrapping="Wrap" Margin="0,8,0,0" Text="Sin análisis." />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                  <Expander Header="Secuencia BFSK">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificar secuencia · inicio manual · 0,10 s por bit" />
-                        <TextBlock Text="Inicio del primer bit (segundos, admite centésimas o más decimales):" />
-                        <TextBox x:Name="SequenceStartTextBox" Text="0" Padding="8" />
-                        <TextBlock Text="Cantidad esperada de bits (1–64):" Margin="0,8,0,0" />
-                        <TextBox x:Name="SequenceBitCountTextBox" Text="8" Padding="8" />
-                        <Button x:Name="DecodeSequenceButton" Content="Analizar secuencia grabada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="DecodeSequence_Click" />
-                        <TextBlock x:Name="DecodedSequenceText" Text="Sin decodificación." TextWrapping="Wrap" Margin="0,8,0,0" />
-                        <TextBox x:Name="SequenceDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                  <Expander Header="Sincronización BFSK">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática" />
-                        <TextBlock Text="Cantidad esperada de bits de datos (1–16):" />
-                        <TextBox x:Name="SyncBitCountTextBox" Text="8" Padding="8" />
-                        <Button x:Name="SynchronizeButton" Content="Buscar y decodificar trama" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="Synchronize_Click" />
-                        <TextBlock x:Name="SynchronizationText" Text="Sin búsqueda." TextWrapping="Wrap" Margin="0,8,0,0" />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                  <Expander Header="Tono FDM">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Detección FDM" />
-                        <TextBlock Text="Inicio de la ventana de 0,10 s (segundos):" />
-                        <TextBox x:Name="FdmAnalysisStartTextBox" Text="0" Padding="8" />
-                        <Button x:Name="AnalyzeFdmButton" Content="Analizar ambos canales" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeFdm_Click" />
-                        <TextBlock x:Name="FdmDetectionText" Text="Sin análisis FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                  <Expander Header="Secuencia FDM">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificación FDM" />
-                        <TextBlock Text="Última grabación finalizada · inicio común manual (segundos):" />
-                        <TextBox x:Name="FdmDecodeStartTextBox" Text="0" Padding="8" />
-                        <TextBlock Text="Símbolos esperados por canal (1–16):" Margin="0,8,0,0" />
-                        <TextBox x:Name="FdmDecodeCountTextBox" Text="8" Padding="8" />
-                        <CheckBox x:Name="FdmDecodeFramesCheckBox" Content="Incluir cabeceras de trama (la cantidad indicada corresponde a datos)" Margin="0,8,0,0" />
-                        <Button x:Name="DecodeFdmButton" Content="Decodificar ambas secuencias" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="DecodeFdm_Click" />
-                        <TextBlock x:Name="FdmDecodedText" Text="Sin decodificación FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
-                        <TextBox x:Name="FdmDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                  <Expander Header="Sincronización FDM">
-                    <Border Style="{StaticResource Card}">
-                      <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática FDM" />
-                        <TextBlock Text="Última grabación finalizada · bits de datos por canal (1–16):" />
-                        <TextBox x:Name="FdmSyncCountTextBox" Text="8" Padding="8" />
-                        <Button x:Name="SynchronizeFdmButton" Content="Buscar ambas tramas" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="SynchronizeFdm_Click" />
-                        <Button x:Name="CancelFdmSyncButton" Content="Cancelar búsqueda FDM" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelFdmSync_Click" />
-                        <TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" />
-                      </StackPanel>
-                    </Border>
-                  </Expander>
-                </StackPanel>
-              </Border>
-            </Expander>
-          </StackPanel>
-        </ScrollViewer>
+        <ScrollViewer VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled">
+<Grid Margin="0,4,8,0"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+<StackPanel><TextBlock Text="{Binding Text, ElementName=AudioSourceText}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock x:Name="AnalysisConfigurationWarning" Text="Opciones independientes del Receptor: seleccioná aquí Hamming y recuperación de borrados para esta medición." Foreground="#FFCE75" Margin="0,8,0,0" /><WrapPanel Margin="0,2,0,4"><Button x:Name="AnalyzeExperimentButton" Content="Medir grabación seleccionada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeExperiment_Click" /><Button x:Name="CancelExperimentButton" Content="Cancelar medición" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelExperiment_Click" /><Button x:Name="ExportExperimentButton" Content="Exportar medición a CSV" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="ExportExperiment_Click" /></WrapPanel></StackPanel>
+<Expander Grid.Row="1" Header="Configurar medición · referencias, Hamming y perfil declarado"><Grid Margin="0,4,0,8"><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="16" /><ColumnDefinition /></Grid.ColumnDefinitions>
+<StackPanel><TextBlock Text="Texto de referencia A" /><TextBox x:Name="ExperimentExpectedATextBox" Text="Hola" Padding="8" /><TextBlock Text="Texto de referencia B" /><TextBox x:Name="ExperimentExpectedBTextBox" Text="Mundo" Padding="8" /></StackPanel>
+<StackPanel Grid.Column="2"><CheckBox x:Name="ExperimentHammingCheckBox" Content="Transmisión con Hamming (7,4)" IsChecked="False" Margin="0,8,0,0" /><CheckBox x:Name="RecoverExperimentErasuresCheckBox" Content="Recuperar borrados (?) con Hamming" IsChecked="False" IsEnabled="False" Margin="0,8,0,0" /><TextBlock Text="Perfil FDM declarado manualmente" /><ComboBox x:Name="ExperimentProfileComboBox" Margin="0,4,0,0" /></StackPanel></Grid></Expander>
+<TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+<TabItem Header="Resumen"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+<Border Style="{StaticResource Card}" Padding="14" BorderBrush="{StaticResource ChannelABrush}"><StackPanel><TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" FontWeight="Bold" /><visual:MetricsView x:Name="MetricsAView" /></StackPanel></Border>
+<Border Grid.Column="2" Style="{StaticResource Card}" Padding="14" BorderBrush="{StaticResource ChannelBBrush}"><StackPanel><TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="Bold" /><visual:MetricsView x:Name="MetricsBView" /></StackPanel></Border></Grid>
+<Border Style="{StaticResource Card}" Padding="12"><StackPanel><TextBlock Text="Procesamiento de la grabación · no es tiempo real" FontWeight="SemiBold" /><TextBlock x:Name="AnalysisPipelineText" Text="Señal → bits → Hamming → CRC y mensaje: No disponible" /></StackPanel></Border></StackPanel></ScrollViewer></TabItem>
+<TabItem Header="Hamming"><Border Style="{StaticResource Card}" Padding="14"><visual:HammingTraceView x:Name="HammingWordTraceView" /></Border></TabItem>
+<TabItem Header="Diagnóstico"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Fuente analizada" Style="{StaticResource Heading}" /><TextBlock Text="{Binding Text, ElementName=AudioSourceText}" /><TextBlock Text="{Binding Text, ElementName=CaptureFormatText}" /><TextBlock Text="{Binding Text, ElementName=CaptureMetricsText}" /></StackPanel></Border><Border Style="{StaticResource Card}" Padding="14"><StackPanel><TextBlock x:Name="ExperimentSummaryText" Text="Sin mediciones." TextWrapping="Wrap" Margin="0,8,0,0" /><Expander Header="Canal A · contadores completos"><TextBlock x:Name="ExperimentChannelAText" Text="Sin analizar" /></Expander><Expander Header="Canal B · contadores completos"><TextBlock x:Name="ExperimentChannelBText" Text="Sin analizar" /></Expander><TextBox x:Name="ExperimentDetailsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="250" VerticalScrollBarVisibility="Auto" /></StackPanel></Border><Expander Header="Herramientas de diagnóstico manual"><Border Style="{StaticResource Card}"><StackPanel><Expander Header="Tono BFSK"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Analizar tono BFSK · ventana de 0,10 s" /><TextBlock Text="Instante inicial de la ventana (segundos):" /><TextBox x:Name="AnalysisStartTextBox" Text="0" Padding="8" /><Button x:Name="AnalyzeToneButton" Content="Analizar grabación finalizada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeTone_Click" /><TextBlock x:Name="AnalysisResultText" TextWrapping="Wrap" Margin="0,8,0,0" Text="Sin análisis." /></StackPanel></Border></Expander><Expander Header="Secuencia BFSK"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificar secuencia · inicio manual · 0,10 s por bit" /><TextBlock Text="Inicio del primer bit (segundos, admite centésimas o más decimales):" /><TextBox x:Name="SequenceStartTextBox" Text="0" Padding="8" /><TextBlock Text="Cantidad esperada de bits (1–64):" Margin="0,8,0,0" /><TextBox x:Name="SequenceBitCountTextBox" Text="8" Padding="8" /><Button x:Name="DecodeSequenceButton" Content="Analizar secuencia grabada" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="DecodeSequence_Click" /><TextBlock x:Name="DecodedSequenceText" Text="Sin decodificación." TextWrapping="Wrap" Margin="0,8,0,0" /><TextBox x:Name="SequenceDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" /></StackPanel></Border></Expander><Expander Header="Sincronización BFSK"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática" /><TextBlock Text="Cantidad esperada de bits de datos (1–16):" /><TextBox x:Name="SyncBitCountTextBox" Text="8" Padding="8" /><Button x:Name="SynchronizeButton" Content="Buscar y decodificar trama" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="Synchronize_Click" /><TextBlock x:Name="SynchronizationText" Text="Sin búsqueda." TextWrapping="Wrap" Margin="0,8,0,0" /></StackPanel></Border></Expander><Expander Header="Tono FDM"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Detección FDM" /><TextBlock Text="Inicio de la ventana de 0,10 s (segundos):" /><TextBox x:Name="FdmAnalysisStartTextBox" Text="0" Padding="8" /><Button x:Name="AnalyzeFdmButton" Content="Analizar ambos canales" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="AnalyzeFdm_Click" /><TextBlock x:Name="FdmDetectionText" Text="Sin análisis FDM." TextWrapping="Wrap" Margin="0,8,0,0" /></StackPanel></Border></Expander><Expander Header="Secuencia FDM"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Decodificación FDM" /><TextBlock Text="Última grabación finalizada · inicio común manual (segundos):" /><TextBox x:Name="FdmDecodeStartTextBox" Text="0" Padding="8" /><TextBlock Text="Símbolos esperados por canal (1–16):" Margin="0,8,0,0" /><TextBox x:Name="FdmDecodeCountTextBox" Text="8" Padding="8" /><CheckBox x:Name="FdmDecodeFramesCheckBox" Content="Incluir cabeceras de trama (la cantidad indicada corresponde a datos)" Margin="0,8,0,0" /><Button x:Name="DecodeFdmButton" Content="Decodificar ambas secuencias" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="DecodeFdm_Click" /><TextBlock x:Name="FdmDecodedText" Text="Sin decodificación FDM." TextWrapping="Wrap" Margin="0,8,0,0" /><TextBox x:Name="FdmDiagnosticsText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" /></StackPanel></Border></Expander><Expander Header="Sincronización FDM"><Border Style="{StaticResource Card}"><StackPanel><TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Sincronización automática FDM" /><TextBlock Text="Última grabación finalizada · bits de datos por canal (1–16):" /><TextBox x:Name="FdmSyncCountTextBox" Text="8" Padding="8" /><Button x:Name="SynchronizeFdmButton" Content="Buscar ambas tramas" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="SynchronizeFdm_Click" /><Button x:Name="CancelFdmSyncButton" Content="Cancelar búsqueda FDM" IsEnabled="False" Padding="8" Margin="0,8,0,0" Click="CancelFdmSync_Click" /><TextBlock x:Name="FdmSyncResultText" Text="Sin búsqueda FDM." TextWrapping="Wrap" Margin="0,8,0,0" /></StackPanel></Border></Expander></StackPanel></Border></Expander></StackPanel></ScrollViewer></TabItem>
+</TabControl></Grid></ScrollViewer>
       </TabItem>
     </TabControl>
   </Grid>

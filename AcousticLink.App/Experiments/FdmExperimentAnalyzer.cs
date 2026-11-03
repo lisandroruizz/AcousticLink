@@ -14,6 +14,7 @@ public sealed record BitComparison(string ExpectedBits, string ObservedBits, int
 
 public sealed record ExperimentHammingStats(IReadOnlyList<Hamming74WordResult> Words, int InconclusiveWords, int IncompleteWords)
 {
+    public IReadOnlyList<Hamming74WordTrace> Traces { get; init; } = Array.Empty<Hamming74WordTrace>();
     public int AnalyzedWords => Words.Count(w => w.IsDecodable);
     public int NonzeroSyndromes => Words.Count(w => w.HasSyndrome && w.Syndrome != 0);
     public int AppliedBitFlips => Words.Count(w => w.FlippedPosition.HasValue);
@@ -85,6 +86,11 @@ public sealed class FdmExperimentAnalyzer
 
         var decoded = new StringBuilder();
         var words = new List<Hamming74WordResult>();
+        var traces = new List<Hamming74WordTrace>();
+        // La traza no incluye relleno aunque el texto de referencia tenga otra longitud.
+        // Si no se pudo leer una longitud válida, solo las dos palabras de longitud son delimitables.
+        int traceLimit = reception.ByteLength is >= 1 and <= FdmTextFrameBuilder.MaximumUtf8Bytes
+            ? (8 + reception.ByteLength.Value * 8 + MessageCodec.CrcBytes * 8) / 4 * 7 : 14;
         var codec = new Hamming74Codec();
         int unknownWords = 0;
         int availableWords = raw.Length / 7;
@@ -98,17 +104,24 @@ public sealed class FdmExperimentAnalyzer
                 if (!recoverErasures)
                 {
                     decoded.Append("????");
+                    if (i * 7 < traceLimit)
+                        traces.Add(new(i, word, null, null, null, null, Array.Empty<int>(), Hamming74TraceState.Unrecoverable,
+                            "Recuperación desactivada: palabra omitida, sin síndrome ni inversiones.") { Channel = name });
                     continue;
                 }
             }
             var result = codec.Decode(word, recoverErasures);
             decoded.Append(result.DataBits);
             words.Add(result.Words[0] with { WordIndex = i });
+            if (i * 7 < traceLimit) traces.Add(result.Traces[0] with { WordIndex = i, Channel = name });
         }
+        if (raw.Length % 7 != 0 && availableWords * 7 < traceLimit)
+            traces.Add(new(availableWords, raw[(availableWords * 7)..], null, null, null, null, Array.Empty<int>(),
+                Hamming74TraceState.Incomplete, "Fragmento truncado: no se decodificó ni se inventaron símbolos faltantes.") { Channel = name });
         int incompleteWords = reference.EncodedBlockBitCount / 7 - availableWords;
         var after = Compare(reference.OriginalBlockBits, decoded.ToString());
         return new(name, message, reference.OriginalBlockBits, reference.EncodedBlockBits, before, after,
-            new(words.AsReadOnly(), unknownWords, incompleteWords), reception,
+            new(words.AsReadOnly(), unknownWords, incompleteWords) { Traces = traces.AsReadOnly() }, reception,
             "BER previa sobre bits codificados; posterior sobre bits originales. Las inversiones son intentos, no correcciones demostradas. " +
             "Solo las palabras reconstruidas aportan cobertura posterior; los borrados originales permanecen en la cobertura previa. " +
             "Las palabras incompletas figuran como faltantes. " + reception.Reason);

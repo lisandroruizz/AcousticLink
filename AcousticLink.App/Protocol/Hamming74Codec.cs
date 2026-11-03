@@ -12,6 +12,7 @@ public sealed record Hamming74WordResult(int WordIndex, int Syndrome, int? Flipp
 
 public sealed record Hamming74DecodeResult(string DataBits, IReadOnlyList<Hamming74WordResult> Words)
 {
+    public IReadOnlyList<Hamming74WordTrace> Traces { get; init; } = Array.Empty<Hamming74WordTrace>();
     public int WordCount => Words.Count;
     // Síndrome cero NO garantiza ausencia de errores múltiples.
     public int ZeroSyndromeWordCount => Words.Count(w => w.HasSyndrome && w.Syndrome == 0);
@@ -60,6 +61,7 @@ public sealed class Hamming74Codec
         int wordCount = encodedBits.Length / 7;
         var data = new char[checked(wordCount * 4)];
         var words = new List<Hamming74WordResult>(wordCount);
+        var traces = new List<Hamming74WordTrace>(wordCount);
         Span<int> word = stackalloc int[8]; // Índice cero sin usar para respetar posiciones 1–7.
         for (int index = 0; index < wordCount; index++)
         {
@@ -70,6 +72,7 @@ public sealed class Hamming74Codec
                 // Solo coincidencias exactas con los bits conocidos, que se suponen correctos.
                 // No se combina el borrado con la corrección por síndrome.
                 string? candidate = null;
+                string? candidateWord = null;
                 int matches = 0;
                 if (erasures <= 2)
                     for (int value = 0; value < 16; value++)
@@ -78,12 +81,18 @@ public sealed class Hamming74Codec
                         string valid = Encode(information);
                         if (!Enumerable.Range(0, 7).All(p => received[p] == '?' || received[p] == valid[p])) continue;
                         candidate = information;
+                        candidateWord = valid;
                         matches++;
                     }
                 bool recovered = matches == 1;
                 (recovered ? candidate! : "????").CopyTo(0, data, index * 4, 4);
                 words.Add(new(index, 0, null) { HasSyndrome = false, ErasureCount = erasures,
                     RecoveredErasureCount = recovered ? erasures : 0, IsDecodable = recovered });
+                traces.Add(new(index, received, recovered ? candidateWord : null, recovered ? candidate : null,
+                    null, null, Array.AsReadOnly(recovered ? Enumerable.Range(1, 7).Where(p => received[p - 1] == '?').ToArray() : []),
+                    recovered ? Hamming74TraceState.ErasuresRecovered : Hamming74TraceState.Unrecoverable,
+                    recovered ? "Candidata única compatible con los bits conocidos; comprobar CRC."
+                        : erasures > 2 ? "Tres o más borrados: recuperación no admitida." : "No hay una candidata única compatible."));
                 continue;
             }
             for (int position = 1; position <= 7; position++)
@@ -98,8 +107,15 @@ public sealed class Hamming74Codec
             data[index * 4 + 1] = ToChar(word[5]);
             data[index * 4 + 2] = ToChar(word[6]);
             data[index * 4 + 3] = ToChar(word[7]);
+            var resultWord = new char[7];
+            for (int p = 1; p <= 7; p++) resultWord[p - 1] = ToChar(word[p]);
+            traces.Add(new(index, received, new string(resultWord),
+                new string(data, index * 4, 4), syndrome, syndrome == 0 ? null : syndrome, Array.Empty<int>(),
+                syndrome == 0 ? Hamming74TraceState.Unchanged : Hamming74TraceState.BitFlipped,
+                syndrome == 0 ? "Síndrome cero; no garantiza ausencia de errores múltiples."
+                    : "Inversión indicada por el síndrome; la integridad final depende del CRC."));
         }
-        return new(new string(data), words.AsReadOnly());
+        return new(new string(data), words.AsReadOnly()) { Traces = traces.AsReadOnly() };
     }
 
     private static char ToChar(int bit) => (char)('0' + bit);

@@ -4,6 +4,7 @@ using AcousticLink.App.Audio;
 using AcousticLink.App.Signals;
 using AcousticLink.App.Protocol;
 using AcousticLink.App.Experiments;
+using AcousticLink.App.Visualization;
 
 namespace AcousticLink.App;
 
@@ -24,6 +25,10 @@ public partial class MainWindow : Window
     private bool wasCaptureRecording;
     private bool analyzing;
     private bool playing;
+    private CapturedAudio? waveformAudio;
+    private CapturedAudio? liveWaveformAudio;
+    private IncrementalWaveform? liveWaveform;
+    private readonly float[] liveWaveformBuffer = new float[8192];
     private CancellationTokenSource? fdmSyncCancellation;
     private CancellationTokenSource? textReceiveCancellation;
     private CancellationTokenSource? experimentCancellation;
@@ -33,6 +38,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ReceptionAView.TextRequested += () => { ReceivedFrameExplorer.OpenText(0); ReceivedFrameExplorer.BringIntoView(); };
+        ReceptionBView.TextRequested += () => { ReceivedFrameExplorer.OpenText(1); ReceivedFrameExplorer.BringIntoView(); };
         FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
         FdmProfileComboBox.SelectedIndex = 0;
         ExperimentProfileComboBox.Items.Add("No informado / desconocido");
@@ -355,6 +362,17 @@ public partial class MainWindow : Window
         FdmDiagnosticsText.Clear();
         FdmSyncResultText.Text = pending;
         ReceivedFdmText.Text = pending;
+        ReceptionAView.Clear(); ReceptionBView.Clear();
+        ReceivedFrameExplorer.Clear();
+        MetricsAView.Clear(); MetricsBView.Clear();
+        HammingWordTraceView.Clear();
+        AnalysisPipelineText.Text = "Señal → bits → Hamming → CRC y mensaje: No disponible";
+        waveformAudio = null;
+        liveWaveformAudio = null;
+        liveWaveform = null;
+        ReceivedWaveform.SetData([], 0);
+        UpdateWaveformScale();
+        WaveformInfoText.Text = "Sin señal finalizada disponible";
         ReceivedChannelAText.Text = "Sin analizar";
         ReceivedChannelBText.Text = "Sin analizar";
         ReceivedChannelAText.Foreground = System.Windows.Media.Brushes.LightGray;
@@ -373,11 +391,29 @@ public partial class MainWindow : Window
         GeneralStateText.Text = captureBusy ? "Operando micrófono…" : capture.IsRecording ? "Capturando audio"
             : analyzing ? "Procesando audio…" : playing ? "Reproduciendo audio"
             : audioSelection.Current is null ? "Sin audio seleccionado" : "Audio seleccionado · sin operación activa";
+        var live = capture.IsRecording ? capture.Recording?.GetMetrics() : null;
+        LiveCaptureText.Text = captureBusy ? "Iniciando o finalizando captura…" : live.HasValue
+            ? $"Grabando · {live.Value.DurationSeconds:0.00} s de muestras · RMS {live.Value.Rms:G6} · pico {live.Value.Peak:G6}"
+            : audioSelection.Current?.Audio.GetMetrics().StopReason is { } reason && reason != CaptureStopReason.None
+                ? reason == CaptureStopReason.Imported ? "WAV seleccionado" : "Captura finalizada"
+                : "Sin captura activa";
+        CaptureRmsBar.Value = live.HasValue ? Math.Min(1, live.Value.Rms) : 0;
         StartCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
         LoadWavButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing;
         StopCaptureButton.IsEnabled = capture.IsRecording && !captureBusy;
         CaptureDurationComboBox.IsEnabled = !capture.IsRecording && !captureBusy;
         var recording = audioSelection.Current?.Audio;
+        CaptureProgressBar.Value = recording is null ? 0 : Math.Min(1, recording.GetMetrics().DurationSeconds / recording.MaximumDurationSeconds);
+        if (capture.IsRecording && !captureBusy && ReferenceEquals(recording, capture.Recording) && recording is not null)
+            UpdateLiveWaveform(recording);
+        bool differentModes = UseHammingReceiveCheckBox.IsChecked != ExperimentHammingCheckBox.IsChecked ||
+            (UseHammingReceiveCheckBox.IsChecked == true && ExperimentHammingCheckBox.IsChecked == true &&
+             RecoverReceiveErasuresCheckBox.IsChecked != RecoverExperimentErasuresCheckBox.IsChecked);
+        AnalysisConfigurationWarning.Text = differentModes
+            ? "ADVERTENCIA: Receptor y mediciones tienen modalidades distintas. No se cambian automáticamente."
+            : "Receptor y mediciones: modalidades coincidentes, opciones independientes.";
+        if (!capture.IsRecording && !captureBusy && recording is not null && !ReferenceEquals(waveformAudio, recording))
+            _ = UpdateWaveformAsync(recording);
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
         AnalyzeToneButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
@@ -416,6 +452,56 @@ public partial class MainWindow : Window
                 _ => "Micrófono detenido por el dispositivo."
             };
         wasCaptureRecording = capture.IsRecording;
+    }
+
+    private void WaveformScale_Changed(object sender, SelectionChangedEventArgs e) => UpdateWaveformScale();
+
+    private void UpdateWaveformScale()
+    {
+        if (ReceivedWaveform is null || WaveformScaleText is null) return;
+        ReceivedWaveform.UseAutoScale = WaveformScaleComboBox.SelectedIndex == 1;
+        WaveformScaleText.Text = $"Pico absoluto: {ReceivedWaveform.PeakAbsolute:G6} · escala ±{ReceivedWaveform.VerticalLimit:G6}. " +
+            "Solo visual: no modifica las muestras. En escala ±1 los valores superiores quedan fuera del área del gráfico.";
+    }
+
+    private void UpdateLiveWaveform(CapturedAudio recording)
+    {
+        try
+        {
+            if (!ReferenceEquals(liveWaveformAudio, recording))
+            {
+                liveWaveformAudio = recording;
+                liveWaveform = new IncrementalWaveform(recording.SampleCapacity);
+            }
+            // Máximo acotado por tick; solo muestras nuevas, fuera del callback de NAudio.
+            for (int i = 0; i < 8; i++)
+            {
+                int read = recording.CopySamples(liveWaveform!.SampleCount, liveWaveformBuffer);
+                if (read == 0) break;
+                liveWaveform.Append(liveWaveformBuffer.AsSpan(0, read));
+            }
+            ReceivedWaveform.SetData(liveWaveform!.Snapshot(), recording.MaximumDurationSeconds, liveWaveform.DisplayFraction);
+            UpdateWaveformScale();
+            WaveformInfoText.Text = $"Grabando · {recording.SampleRate} Hz · {liveWaveform.SampleCount / (double)recording.SampleRate:0.00} s dibujados / {recording.MaximumDurationSeconds} s · RMS y pico acumulados";
+        }
+        catch (Exception ex) { WaveformInfoText.Text = $"No se pudo representar la captura: {ex.Message}"; }
+    }
+
+    private async Task UpdateWaveformAsync(CapturedAudio recording)
+    {
+        waveformAudio = recording;
+        WaveformInfoText.Text = "Preparando forma de onda real…";
+        try
+        {
+            var reduced = await Task.Run(() => WaveformView.Reduce(recording.GetSamples()), windowLifetime.Token);
+            if (closing || !ReferenceEquals(audioSelection.Current?.Audio, recording)) return;
+            var metrics = recording.GetMetrics();
+            ReceivedWaveform.SetData(reduced, metrics.DurationSeconds);
+            UpdateWaveformScale();
+            WaveformInfoText.Text = $"{recording.SampleRate} Hz · {metrics.DurationSeconds:0.000} s · {metrics.Count} muestras · amplitud sin normalizar";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (!closing && ReferenceEquals(audioSelection.Current?.Audio, recording)) WaveformInfoText.Text = $"No se pudo representar la señal: {ex.Message}"; }
     }
 
     private async void LoadWav_Click(object sender, RoutedEventArgs e)
@@ -691,6 +777,7 @@ public partial class MainWindow : Window
     }
 
     private void CancelReceiveFdmText_Click(object sender, RoutedEventArgs e) => textReceiveCancellation?.Cancel();
+    private void OpenAnalysis_Click(object sender, RoutedEventArgs e) => MainSectionsTabs.SelectedIndex = 3;
 
     private async void ReceiveFdmText_Click(object sender, RoutedEventArgs e)
     {
@@ -702,6 +789,8 @@ public partial class MainWindow : Window
         textReceiveCancellation = cancellation;
         CancelReceiveFdmTextButton.IsEnabled = true;
         ReceivedFdmText.Text = "Buscando cabeceras y recuperando mensajes...";
+        ReceptionAView.Clear("Analizando…"); ReceptionBView.Clear("Analizando…");
+        ReceivedFrameExplorer.Clear("Analizando…");
         ReceivedChannelAText.Text = "Sin resultado · análisis en curso";
         ReceivedChannelBText.Text = "Sin resultado · análisis en curso";
         ReceivedChannelAText.Foreground = System.Windows.Media.Brushes.LightGray;
@@ -742,6 +831,9 @@ public partial class MainWindow : Window
             }
             ShowChannel(ReceivedChannelAText, result.ChannelA);
             ShowChannel(ReceivedChannelBText, result.ChannelB);
+            ReceptionAView.Show(result.ChannelA, result.Synchronization, "A");
+            ReceptionBView.Show(result.ChannelB, result.Synchronization, "B");
+            ReceivedFrameExplorer.Show(result);
         }
         catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; }
         catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; }
@@ -749,7 +841,11 @@ public partial class MainWindow : Window
         {
             textReceiveCancellation = null;
             if (ReceivedChannelAText.Text == "Sin resultado · análisis en curso")
+            {
                 ReceivedChannelAText.Text = ReceivedChannelBText.Text = "Sin resultado nuevo. " + ReceivedFdmText.Text;
+                ReceptionAView.Clear(ReceivedFdmText.Text); ReceptionBView.Clear(ReceivedFdmText.Text);
+                ReceivedFrameExplorer.Clear(ReceivedFdmText.Text);
+            }
             CancelReceiveFdmTextButton.IsEnabled = false;
             analyzing = false;
             RefreshCapture();
@@ -769,6 +865,9 @@ public partial class MainWindow : Window
         lastExperiment = null;
         ExperimentDetailsText.Clear();
         ExperimentChannelAText.Text = "Sin resultado · medición en curso";
+        MetricsAView.Clear("Midiendo…"); MetricsBView.Clear("Midiendo…");
+        HammingWordTraceView.Clear("Midiendo…");
+        AnalysisPipelineText.Text = "Análisis de la grabación en curso…";
         ExperimentChannelBText.Text = "Sin resultado · medición en curso";
         analyzing = true;
         RefreshCapture();
@@ -782,6 +881,15 @@ public partial class MainWindow : Window
                 a, b, hamming, selected.Source, cancellation.Token, declaredProfile, recoverErasures), cancellation.Token);
             if (closing) return;
             lastExperiment = result;
+            MetricsAView.Show(result.ChannelA, result.UsesHamming);
+            MetricsBView.Show(result.ChannelB, result.UsesHamming);
+            HammingWordTraceView.Show(result);
+            string Detected(FdmChannelExperiment c) => c.Before is { } b ? $"{b.ComparedBits}/{b.ExpectedCount} bits concluyentes" : "No disponible";
+            string Crc(FdmChannelExperiment c) => c.Reception.CrcValid is true ? "válido" : c.Reception.CrcValid is false ? "inválido" : "no comprobado";
+            AnalysisPipelineText.Text = $"1. Audio {result.AudioDurationSeconds:0.00} s · {result.SampleRate} Hz → " +
+                $"2. Bits A: {Detected(result.ChannelA)}, B: {Detected(result.ChannelB)} → " +
+                $"3. Hamming: {(!result.UsesHamming ? "desactivado" : result.ChannelA.Hamming is null && result.ChannelB.Hamming is null ? "No disponible" : "palabras disponibles procesadas")} → " +
+                $"4. CRC A: {Crc(result.ChannelA)} · B: {Crc(result.ChannelB)}";
             static string Describe(string title, BitComparison? comparison) => comparison is null ? $"{title}: no calculable (sin alineación validada)." :
                 $"{title}: esperados {comparison.ExpectedCount}, comparados {comparison.ComparedBits}, errores {comparison.IncorrectBits}, " +
                 $"no concluyentes {comparison.InconclusiveBits}, faltantes {comparison.MissingBits}, BER " +
@@ -808,6 +916,7 @@ public partial class MainWindow : Window
                 $"sincronización {result.Synchronization.State}";
             ExperimentChannelAText.Text = ChannelSummary(result.ChannelA);
             ExperimentChannelBText.Text = ChannelSummary(result.ChannelB);
+            ExperimentSummaryText.Text += $"\nMedición UTC: {result.AnalyzedAt:O}";
             ExperimentDetailsText.Text = result.Synchronization.Reason + "\n" + string.Join("\n\n", new[] { result.ChannelA, result.ChannelB }.Select(c =>
                 $"Canal {c.Channel}: {c.Diagnostic}\nReferencia original: {c.OriginalReferenceBits}\nReferencia transmitida: {c.TransmittedReferenceBits}\n" +
                 $"Recibidos: {c.Before?.ObservedBits ?? "no evaluables"}\nReconstruidos: {c.After?.ObservedBits ?? "no corresponde/no evaluables"}"));
@@ -818,7 +927,12 @@ public partial class MainWindow : Window
         {
             experimentCancellation = null;
             if (lastExperiment is null)
+            {
                 ExperimentChannelAText.Text = ExperimentChannelBText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
+                MetricsAView.Clear(ExperimentSummaryText.Text); MetricsBView.Clear(ExperimentSummaryText.Text);
+                HammingWordTraceView.Clear(ExperimentSummaryText.Text);
+                AnalysisPipelineText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
+            }
             CancelExperimentButton.IsEnabled = false;
             analyzing = false;
             RefreshCapture();

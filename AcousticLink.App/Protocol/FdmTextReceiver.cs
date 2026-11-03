@@ -105,7 +105,9 @@ public sealed class FdmTextReceiver
         if (!lengthSymbols.IsComplete && !recoverErasures)
             return Failure(FdmTextReceiveState.InconclusiveLength, "Símbolos '?' en la longitud protegida; no se aplica Hamming.", block: lengthSymbols);
         var hamming = new Hamming74Codec();
-        var decodedLength = hamming.Decode(lengthSymbols.Bits, recoverErasures);
+        Hamming74DecodeResult WithChannel(Hamming74DecodeResult result) => result with
+        { Traces = Array.AsReadOnly(result.Traces.Select(t => t with { Channel = channelA ? "A" : "B" }).ToArray()) };
+        var decodedLength = WithChannel(hamming.Decode(lengthSymbols.Bits, recoverErasures));
         diagnostics = decodedLength;
         if (!decodedLength.IsComplete)
             return Failure(FdmTextReceiveState.InconclusiveLength, "Longitud protegida con palabras irrecuperables; CRC no comprobado.", block: lengthSymbols);
@@ -120,7 +122,7 @@ public sealed class FdmTextReceiver
         var block = channelA ? blocks.ChannelA : blocks.ChannelB;
         if (!block.IsComplete && !recoverErasures)
             return Failure(FdmTextReceiveState.InconclusiveBits, "Bloque protegido con símbolos '?'; no se inventan bits ni se verifica CRC.", length, block);
-        var decoded = hamming.Decode(block.Bits, recoverErasures);
+        var decoded = WithChannel(hamming.Decode(block.Bits, recoverErasures));
         diagnostics = decoded;
         completeBlock = true;
         if (!decoded.IsComplete)

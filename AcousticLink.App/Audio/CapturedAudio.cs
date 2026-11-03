@@ -97,6 +97,18 @@ public sealed class CapturedAudio
         lock (sync) return samples[..count];
     }
 
+    // Lee solo el prefijo nuevo publicado. Sus valores nunca cambian después de Append.
+    // El bloqueo se limita a tomar el contador; la copia no detiene el callback de captura.
+    public int CopySamples(int start, Span<float> destination)
+    {
+        int available;
+        lock (sync) available = count;
+        if (start < 0 || start > available) throw new ArgumentOutOfRangeException(nameof(start));
+        int length = Math.Min(destination.Length, available - start);
+        samples.AsSpan(start, length).CopyTo(destination);
+        return length;
+    }
+
     public void SaveWav(string path)
     {
         // El prefijo publicado nunca se modifica: solo se agregan nuevas muestras al final.
