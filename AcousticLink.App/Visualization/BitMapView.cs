@@ -15,11 +15,19 @@ public sealed class BitMapView : UserControl
 {
     private readonly StackPanel panel = new();
     private readonly List<Button> symbolButtons = new();
+    private WrapPanel? renderedGroups;
+    private int renderedGroupSize;
     public event Action<DisplayBit>? PositionSelected;
     public bool ShowConventionalRoles { get; set; }
     public bool CompactSingleGroup { get; set; }
     public IReadOnlyList<Hamming74WordTrace> WordTraces { get; set; } = Array.Empty<Hamming74WordTrace>();
-    public BitMapView() { Content = panel; }
+    public BitMapView() { Content = panel; SizeChanged += (_, _) => FitGroupWidths(); }
+    private void FitGroupWidths()
+    {
+        if (!CompactSingleGroup || renderedGroups is null) return;
+        double available = ActualWidth > 0 ? ActualWidth - 12 : renderedGroupSize * 48;
+        renderedGroups.ItemWidth = Math.Min(Math.Max(renderedGroupSize * 40, available), renderedGroupSize * 64);
+    }
 
     public static IReadOnlyList<DisplayBit> Describe(string observed, string? expected = null)
     {
@@ -69,8 +77,10 @@ public sealed class BitMapView : UserControl
         panel.Children.Add(new TextBlock { Text = title, FontSize = 14 });
         if (bits.Count == 0) { panel.Children.Add(new TextBlock { Text = "No hay símbolos disponibles" }); return; }
         var groups = new WrapPanel();
+        groups.HorizontalAlignment = CompactSingleGroup ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        renderedGroups = groups; renderedGroupSize = groupSize; FitGroupWidths();
         var selection = new TextBlock { Text = "Seleccioná una posición para inspeccionarla.", MinHeight = 42, Margin = new Thickness(0, 4, 0, 0) };
-        var focusedSymbol = new TextBlock { Text = "·", FontSize = 32, MinWidth = 48, Margin = new Thickness(0, 4, 8, 0), FontFamily = new FontFamily("Consolas") };
+        var focusedSymbol = new TextBlock { Text = "·", FontSize = 32, MinWidth = 48, Margin = new Thickness(0, 4, 8, 0), FontFamily = (FontFamily)FindResource("CodeFont") };
         for (int start = 0; start < bits.Count; start += groupSize)
         {
             var group = new StackPanel();
@@ -79,7 +89,7 @@ public sealed class BitMapView : UserControl
             foreach (var bit in bits.Skip(start).Take(groupSize))
             {
                 var labels = new StackPanel();
-                labels.Children.Add(new TextBlock { Text = bit.Observed?.ToString() ?? "—", FontSize = 18, HorizontalAlignment = HorizontalAlignment.Center });
+                labels.Children.Add(new TextBlock { Text = bit.Observed?.ToString() ?? "—", FontSize = 20, FontFamily = (FontFamily)FindResource("CodeFont"), HorizontalAlignment = HorizontalAlignment.Center });
                 labels.Children.Add(new TextBlock { Text = (bit.Index + 1).ToString(), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center });
                 if (ShowConventionalRoles && usesHamming)
                     labels.Children.Insert(0, new TextBlock { Text = after ? $"D{bit.Index % 4 + 1}" : new[] { "P1", "P2", "D1", "P4", "D2", "D3", "D4" }[bit.Index % 7], HorizontalAlignment = HorizontalAlignment.Center });
@@ -90,11 +100,12 @@ public sealed class BitMapView : UserControl
                 var trace = WordTraces.FirstOrDefault(t => t.WordIndex == bit.Index / (after ? 4 : 7));
                 if (trace is not null && bit.Observed is '0' or '1')
                 {
-                    if (after && trace.RecoveredPositions.Contains(codePosition)) color = Brushes.LightGreen;
+                    if (after && trace.RecoveredPositions.Contains(codePosition)) color = (Brush)FindResource("HammingBrush");
                     else if (trace.FlippedPosition == codePosition) color = Brushes.Salmon;
                 }
                 var button = new Button { Content = labels, Foreground = color, Padding = new Thickness(2), MinWidth = 28,
                     MinHeight = 42, HorizontalAlignment = HorizontalAlignment.Stretch, BorderBrush = color, Margin = new Thickness(1), Tag = bit };
+                System.Windows.Automation.AutomationProperties.SetName(button, $"Bit {bit.Index + 1}, {(after ? "reconstruido" : "recibido")}: {bit.Observed?.ToString() ?? "faltante"}");
                 button.Click += (_, _) =>
                 {
                     focusedSymbol.Text = bit.Observed?.ToString() ?? "—";
@@ -120,8 +131,9 @@ public sealed class BitMapView : UserControl
         var inspector = new DockPanel(); DockPanel.SetDock(focusedSymbol, Dock.Left);
         inspector.Children.Add(focusedSymbol); inspector.Children.Add(selection);
         if (!ShowConventionalRoles) panel.Children.Add(inspector); // El explorador aporta su inspector de índices y correspondencias.
-        panel.Children.Add(new TextBlock { Text = ShowConventionalRoles
-            ? "0 / 1: valor · amarillo ?: no concluyente · gris —: faltante · rojo: inversión · verde: borrado recuperado"
-            : "0 / 1: valor · rojo: incorrecto respecto de referencia · amarillo ?: indeterminado · gris —: faltante", FontSize = 12 });
+        var legend = new TextBlock { Text = ShowConventionalRoles
+            ? "0 / 1: valor · amarillo ?: no concluyente · gris —: faltante · rojo: inversión · violeta: borrado recuperado"
+            : "0 / 1: valor · rojo: incorrecto respecto de referencia · amarillo ?: indeterminado · gris —: faltante", FontSize = 12 };
+        if (CompactSingleGroup) groups.ToolTip = legend.Text; else panel.Children.Add(legend);
     }
 }

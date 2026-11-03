@@ -76,7 +76,7 @@ var thread = new Thread(() =>
         var card = new ReceptionView();
         card.TextRequested += () => view.OpenText(0);
         card.Show(reception.ChannelA, reception.Synchronization, "A");
-        Children<Button>(card).Single(b => Equals(b.Content, "Texto / UTF-8 · explorar bytes")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Children<Button>(card).Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var tabs = Children<TabControl>(view).Single();
         Require(tabs.Items.Count == 3 && ((TabItem)tabs.SelectedItem).Header.ToString() == "Texto / UTF-8", "Acceso directo a vista estable");
         var textView = Children<Utf8ContentView>(view).Single();
@@ -110,9 +110,9 @@ var thread = new Thread(() =>
         Require(Children<Button>(view).Single(b => b.Tag is int i && i == 21).BorderThickness.Left == 3, "Navegar no reemplaza una selección explícita");
         view.Measure(new Size(1200, 500)); view.Arrange(new Rect(0, 0, 1200, 500)); view.UpdateLayout();
         var workspace = (Grid)((TabItem)tabs.SelectedItem).Content;
-        Require(Grid.GetColumn(workspace.Children.OfType<ScrollViewer>().Last()) == 1, "Ancho disponible se usa en dos columnas");
+        Require(Grid.GetColumn(workspace.Children.OfType<Grid>().Single()) == 1, "Ancho disponible se usa en dos columnas");
         view.Measure(new Size(600, 500)); view.Arrange(new Rect(0, 0, 600, 500)); view.UpdateLayout();
-        Require(Grid.GetRow(workspace.Children.OfType<ScrollViewer>().Last()) == 1, "Ventana pequeña adapta selección y detalle");
+        Require(Grid.GetRow(workspace.Children.OfType<Grid>().Single()) == 1, "Ventana pequeña adapta selección y detalle");
         view.Clear(); Require(!Children<BitMapView>(view).Any(), "Invalidación elimina trama anterior");
         app.Shutdown();
     }

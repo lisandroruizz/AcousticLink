@@ -8,6 +8,7 @@ namespace AcousticLink.App.Visualization;
 
 public sealed class FrameExplorerView : UserControl
 {
+    public bool FitWorkspace { get; set; }
     private readonly ComboBox channels = new() { ItemsSource = new[] { "Canal A", "Canal B" }, SelectedIndex = 0 };
     private readonly ComboBox representation = new() { ItemsSource = new[] { "Símbolos recibidos", "Bits originales reconstruidos" }, SelectedIndex = 0 };
     private readonly TextBlock scope = new();
@@ -21,6 +22,7 @@ public sealed class FrameExplorerView : UserControl
     private readonly TabItem frameTab = new() { Header = "Trama" }, textTab = new() { Header = "Texto / UTF-8" }, hammingTab = new() { Header = "Hamming" };
     private readonly Grid workspace = new();
     private readonly ScrollViewer detailScroll = new();
+    private readonly Grid detailPane = new();
     private readonly Utf8ContentView utf8 = new();
     private readonly Dictionary<(string, FramePart, bool, bool), int> selections = new();
     private readonly TextBlock technicalBitDetail = new();
@@ -40,17 +42,28 @@ public sealed class FrameExplorerView : UserControl
         Height = 450;
         var panel = new Grid();
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); panel.RowDefinitions.Add(new RowDefinition());
-        var top = new StackPanel(); top.Children.Add(channels); top.Children.Add(scope);
+        var top = new StackPanel(); var context = new DockPanel();
+        DockPanel.SetDock(channels, Dock.Left); channels.Margin = new Thickness(0, 0, 12, 0);
+        context.Children.Add(channels); context.Children.Add(scope); top.Children.Add(context);
         top.Children.Add(new TextBlock { Text = "Navegación de secciones · anchos no proporcionales", FontSize = 12 }); top.Children.Add(segments);
         panel.Children.Add(top); Grid.SetRow(views, 1); panel.Children.Add(views); Content = panel;
+        views.ItemContainerStyle = (Style)FindResource("WorkspaceToolTab");
         map.CompactSingleGroup = true;
+        channels.HorizontalAlignment = HorizontalAlignment.Left; channels.MinWidth = 140;
+        representation.HorizontalAlignment = HorizontalAlignment.Left; representation.MaxWidth = 340;
+        representation.Margin = new Thickness(0, 4, 0, 12);
+        scope.FontSize = 13; scope.Foreground = (Brush)FindResource("MutedBrush");
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.34, GridUnitType.Star) }); workspace.ColumnDefinitions.Add(new ColumnDefinition());
         workspace.RowDefinitions.Add(new RowDefinition()); workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var groups = new ScrollViewer { Content = groupStrip, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        var right = new StackPanel(); right.Children.Add(representation); right.Children.Add(detail);
-        detailScroll.Content = right; detailScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; detailScroll.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(detailScroll, 1); workspace.Children.Add(groups); workspace.Children.Add(detailScroll);
+        detailPane.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); detailPane.RowDefinitions.Add(new RowDefinition());
+        detailPane.Margin = new Thickness(12, 0, 0, 0); detailPane.Children.Add(representation);
+        detail.VerticalAlignment = VerticalAlignment.Center;
+        detailScroll.Content = detail; detailScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        Grid.SetRow(detailScroll, 1); detailPane.Children.Add(detailScroll);
+        Grid.SetColumn(detailPane, 1); workspace.Children.Add(groups); workspace.Children.Add(detailPane);
         workspace.SizeChanged += (_, _) => LayoutWorkspace();
+        SizeChanged += (_, _) => LayoutWorkspace();
         views.Items.Add(frameTab); views.Items.Add(textTab); views.Items.Add(hammingTab); views.SelectedIndex = 0; frameTab.Content = workspace;
         views.SelectionChanged += (_, e) =>
         {
@@ -58,22 +71,29 @@ public sealed class FrameExplorerView : UserControl
             frameTab.Content = textTab.Content = hammingTab.Content = null;
             if (views.SelectedItem == textTab) { textTab.Content = utf8; UpdateText(); }
             else { ((TabItem)views.SelectedItem).Content = workspace; Render(); }
+            WorkspaceMotion.Reveal(views);
         };
         utf8.ExploreBytesRequested += (offset, count) => SelectContentBytes(channels.SelectedIndex, offset, count);
         Loaded += (_, _) => { host = Window.GetWindow(this); if (host is not null) { host.SizeChanged += ResizeHost; ResizeHost(null, null); } };
         Unloaded += (_, _) => { if (host is not null) host.SizeChanged -= ResizeHost; host = null; };
-        channels.SelectionChanged += (_, _) => Render(); representation.SelectionChanged += (_, _) => Render();
+        channels.SelectionChanged += (_, _) => { Render(); WorkspaceMotion.Reveal(views); };
+        representation.SelectionChanged += (_, _) => { Render(); WorkspaceMotion.Reveal(detail); };
         map.PositionSelected += ShowBit; Clear();
     }
-    private void ResizeHost(object? sender, SizeChangedEventArgs? e) { if (host is not null) Height = Math.Clamp(host.ActualHeight * 0.58, 340, 560); }
+    private void ResizeHost(object? sender, SizeChangedEventArgs? e)
+    {
+        if (FitWorkspace) Height = double.NaN;
+        else if (host is not null) Height = Math.Clamp(host.ActualHeight * 0.58, 340, 560);
+    }
     private void LayoutWorkspace()
     {
-        bool narrow = workspace.ActualWidth < 720, hasGroups = groupStrip.Children.Count > 0;
-        workspace.ColumnDefinitions[0].Width = new GridLength(narrow ? 1 : hasGroups ? 0.34 : 0, GridUnitType.Star);
+        bool narrow = ActualWidth < 720, hasGroups = groupStrip.Children.Count > 0;
+        workspace.ColumnDefinitions[0].Width = narrow ? new GridLength(1, GridUnitType.Star)
+            : new GridLength(hasGroups ? Math.Clamp(workspace.ActualWidth * 0.24, 150, 260) : 0);
         workspace.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         workspace.RowDefinitions[0].Height = narrow ? new GridLength(hasGroups ? 100 : 0) : new GridLength(1, GridUnitType.Star);
         workspace.RowDefinitions[1].Height = narrow ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-        Grid.SetColumn(detailScroll, narrow ? 0 : 1); Grid.SetRow(detailScroll, narrow ? 1 : 0);
+        Grid.SetColumn(detailPane, narrow ? 0 : 1); Grid.SetRow(detailPane, narrow ? 1 : 0);
     }
     private void UpdateText()
     {
@@ -153,12 +173,12 @@ public sealed class FrameExplorerView : UserControl
         if (hammingView && !channel.UsesHamming) { detail.Children.Add(new TextBlock { Text = "Hamming desactivado: no hay palabras de código para explorar." }); return; }
         if (section.EncodedStart is null || section.EncodedSize is null) { detail.Children.Add(new TextBlock { Text = "Rango no disponible: falta una longitud válida." }); return; }
         int frameStart = header ? 0 : FramePresentation.HeaderSize + section.EncodedStart.Value;
-        detail.Children.Add(new Expander { Header = "Rango de sección", Content = new TextBlock { Text = $"Trama transmitida [{frameStart}, {frameStart + section.EncodedSize}) · índices base cero, fin excluido." } });
+        var rangeDetails = new Expander { Header = "Rango de sección", Content = new TextBlock { Text = $"Trama transmitida [{frameStart}, {frameStart + section.EncodedSize}) · índices base cero, fin excluido." } };
         sectionOffset = (after ? section.OriginalStart : section.EncodedStart)!.Value;
         sectionSize = (after ? section.OriginalSize : section.EncodedSize)!.Value;
         groupSize = channel.UsesHamming && !header && !after ? 7 : 8;
-        detail.Children.Add(new TextBlock { Text = after ? "2 · Bytes originales reconstruidos (no símbolos directos del micrófono)"
-            : groupSize == 7 ? "2 · Palabras Hamming recibidas" : "2 · Bytes recibidos · sin agrupación Hamming", FontWeight = FontWeights.SemiBold });
+        representation.ToolTip = after ? "Bytes originales reconstruidos; no son decisiones directas del micrófono. D1–D4 son posiciones de información."
+            : groupSize == 7 ? "Palabras Hamming realmente recibidas." : "Bytes recibidos sin agrupación Hamming.";
         var groups = groupStrip; groups.Children.Clear();
         for (int start = sectionOffset; start < sectionOffset + sectionSize; start += groupSize)
         {
@@ -174,6 +194,7 @@ public sealed class FrameExplorerView : UserControl
             button.Click += (_, _) => SelectGroup(offset); groups.Children.Add(button);
         }
         detail.Children.Add(groupDetail);
+        detail.Children.Add(rangeDetails);
         LayoutWorkspace();
         if (groups.Children.Count == 0) { groupDetail.Children.Clear(); groupDetail.Children.Add(new TextBlock { Text = "No hay trazas reales de esta sección. La recepción puede haberse detenido en longitud." }); return; }
         var key = (ChannelName, selectedPart, after, hammingView);
@@ -200,9 +221,11 @@ public sealed class FrameExplorerView : UserControl
     {
         groupDetail.Children.Clear();
         if (result is null || section is null) return;
+        WorkspaceMotion.Reveal(groupDetail);
         selections[(ChannelName, selectedPart, after, views.SelectedItem == hammingTab)] = start;
         foreach (var button in groupStrip.Children.OfType<Button>()) button.BorderThickness = new Thickness(button.Tag is int offset && offset == start ? 3 : 1);
-        groupDetail.Children.Add(new TextBlock { Text = $"3 · {section.Name} · {(groupSize == 7 ? $"palabra {start / 7 + 1}" : $"byte de sección {(start - sectionOffset) / 8 + 1}")} · {(after ? "bloque original" : header ? "cabecera" : "bloque transmitido")} [{start}, {Math.Min(start + groupSize, sectionOffset + sectionSize)})", FontSize = 16 });
+        groupDetail.Children.Add(new TextBlock { Text = $"{section.Name} · {(groupSize == 7 ? $"palabra {start / 7 + 1}" : $"byte {(start - sectionOffset) / 8 + 1}")}", FontSize = 16,
+            ToolTip = $"{(after ? "Bloque original" : header ? "Cabecera" : "Bloque transmitido")} [{start}, {Math.Min(start + groupSize, sectionOffset + sectionSize)}) · índices base cero" });
         int size = Math.Min(groupSize, sectionOffset + sectionSize - start);
         var values = Enumerable.Range(start, size).Select(SymbolAt).ToArray();
         var traces = Channel.HammingDiagnostics?.Traces ?? Array.Empty<Hamming74WordTrace>();
@@ -210,8 +233,7 @@ public sealed class FrameExplorerView : UserControl
         string available = new(values.TakeWhile(v => v.HasValue).Select(v => v!.Value).ToArray());
         map.WordTraces = header ? Array.Empty<Hamming74WordTrace>() : traces;
         map.ShowSection(available, ChannelName, Channel.UsesHamming && !header, after, start, size,
-            after ? "Original reconstruido: D1–D4 son bits de información; no posiciones recibidas de siete."
-                : header || !Channel.UsesHamming ? "Símbolos reales recibidos" : "Símbolos reales: P1 | P2 | D1 | P4 | D2 | D3 | D4");
+            after ? "Bits originales reconstruidos" : "Símbolos reales recibidos");
         groupDetail.Children.Add(map);
         bitDetail.Text = "Seleccioná un símbolo para inspeccionarlo."; groupDetail.Children.Add(bitDetail);
         technicalBitDetail.Text = "Sin bit seleccionado.";
@@ -229,6 +251,7 @@ public sealed class FrameExplorerView : UserControl
     private void ShowBit(DisplayBit bit)
     {
         if (result is null) return;
+        WorkspaceMotion.Reveal(bitDetail);
         var p = FramePresentation.Position(Channel.UsesHamming, after, header, bit.Index, Channel.ByteLength);
         char? received = ReceivedAt(header ? bit.Index : p.EncodedIndex!.Value);
         char? reconstructed = p.OriginalIndex is { } original && Channel.HammingDiagnostics?.DataBits is { } data && original < data.Length ? data[original]

@@ -80,7 +80,16 @@ var thread = new Thread(() =>
         var view = new HammingTraceView(); view.Show(on);
         var channel = Children<ComboBox>(view).Single(c => c.Items.Contains("Canal A"));
         var list = Children<ListBox>(view).Single();
-        Require(list.Items.Count == 18 && list.SelectedIndex == 2, "Vista A prioriza borrados recuperados"); list.SelectedIndex = 3;
+        Require(list.Items.Count == 18 && list.SelectedIndex == 2, "Vista A prioriza borrados recuperados");
+        var selectedTrace = (Hamming74WordTrace)((ListBoxItem)list.SelectedItem).Tag;
+        var cells = (System.Windows.Controls.Primitives.UniformGrid)typeof(HammingTraceView).GetField("bitCells", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!;
+        for (int i = 0; i < 7; i++)
+        {
+            var symbols = ((StackPanel)((Border)cells.Children[i]).Child).Children.OfType<TextBlock>().Where(t => Equals(t.Tag, "symbol")).ToArray();
+            Require(symbols.Length == 2 && symbols[0].Text == selectedTrace.ReceivedBits[i].ToString() && symbols[1].Text.StartsWith(selectedTrace.ResultBits![i].ToString()), "Presentación conserva recibido y resultante reales");
+            Require(!selectedTrace.RecoveredPositions.Contains(i + 1) || symbols[1].Text.EndsWith("◆") && symbols[1].ToolTip.ToString()!.Contains("Borrado"), "Borrado identificado por símbolo y texto, sin depender solo del color");
+        }
+        list.SelectedIndex = 3;
         channel.SelectedIndex = 1; Require(list.Items.Count == 20, "Vista B independiente");
         channel.SelectedIndex = 0; Require(list.SelectedIndex == 3, "Conserva selección explícita por canal");
         var parityChoice = Children<ComboBox>(view).Single(c => c.Items.Contains("P1: posiciones 1, 3, 5, 7"));
@@ -88,9 +97,10 @@ var thread = new Thread(() =>
         Require(Children<TextBlock>(view).Any(t => t.Text.Contains("no ejecutó esta visualización paso a paso")), "Paridad no se presenta como ejecución real");
         view.Measure(new Size(1200, 500)); view.Arrange(new Rect(0, 0, 1200, 500)); view.UpdateLayout();
         var workspace = ((Grid)view.Content).Children.OfType<Grid>().Single();
-        Require(Grid.GetColumn(workspace.Children.OfType<ScrollViewer>().Single()) == 1, "Distribución de escritorio en columnas");
+        var inspector = workspace.Children.OfType<Grid>().Single();
+        Require(Grid.GetColumn(inspector) == 2 && workspace.Children.OfType<GridSplitter>().Single().Visibility == Visibility.Visible, "Distribución de escritorio en columnas");
         view.Measure(new Size(650, 500)); view.Arrange(new Rect(0, 0, 650, 500)); view.UpdateLayout();
-        Require(Grid.GetRow(workspace.Children.OfType<ScrollViewer>().Single()) == 1, "Adaptación estrecha sin cortar detalle");
+        Require(Grid.GetRow(inspector) == 1 && workspace.Children.OfType<GridSplitter>().Single().Visibility == Visibility.Collapsed, "Adaptación estrecha sin cortar detalle");
         view.Show(off); channel.SelectedIndex = 0;
         Require(((ListBoxItem)list.Items[2]).Tag is Hamming74WordTrace { State: Hamming74TraceState.Unrecoverable }, "Reanálisis reemplaza trazas");
         view.Show(noLength); Require(list.Items.Count == 2 && Children<TextBlock>(view).Any(t => t.Text.Contains("solo hay detalles del campo de longitud")), "Explica diferencia de alcance con longitud desconocida");

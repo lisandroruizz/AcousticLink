@@ -8,7 +8,7 @@ using AcousticLink.App.Visualization;
 
 namespace AcousticLink.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly BfskToneGenerator toneGenerator = new();
     private readonly FdmToneMixer fdmMixer = new();
@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private bool wasCaptureRecording;
     private bool analyzing;
     private bool playing;
+    private bool fdmTextsValid;
     private CapturedAudio? waveformAudio;
     private CapturedAudio? liveWaveformAudio;
     private IncrementalWaveform? liveWaveform;
@@ -38,8 +39,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        ReceptionAView.TextRequested += () => { ReceivedFrameExplorer.OpenText(0); ReceivedFrameExplorer.BringIntoView(); };
-        ReceptionBView.TextRequested += () => { ReceivedFrameExplorer.OpenText(1); ReceivedFrameExplorer.BringIntoView(); };
+        InitializeWorkspace();
+        ReceptionAView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(0); };
+        ReceptionBView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(1); };
         FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
         FdmProfileComboBox.SelectedIndex = 0;
         ExperimentProfileComboBox.Items.Add("No informado / desconocido");
@@ -129,6 +131,7 @@ public partial class MainWindow : Window
         try
         {
             float[] samples = fdmMixer.Generate(bitA, bitB, profile: profile);
+            RememberGeneratedSignal(samples, FdmToneMixer.SampleRate, $"Tonos FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)} · {FdmAmplitudeProfiles.Get(profile).Label}");
             await playback.PlayAsync(samples, FdmToneMixer.SampleRate, windowLifetime.Token);
             FdmStatusText.Text = "Reproducción FDM finalizada.";
         }
@@ -168,6 +171,7 @@ public partial class MainWindow : Window
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.Generate(a, b, profile), token);
+            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Secuencias FDM · {FdmAmplitudeProfiles.Get(profile).Label}");
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmSequencesStatusText.Text = "Reproducción de ambas secuencias finalizada.";
         }
@@ -207,6 +211,7 @@ public partial class MainWindow : Window
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateFrames(a, b, profile), token);
+            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Tramas binarias FDM · {FdmAmplitudeProfiles.Get(profile).Label}");
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmFramesStatusText.Text = "Reproducción de tramas FDM finalizada.";
         }
@@ -221,17 +226,44 @@ public partial class MainWindow : Window
     private void UpdateFdmTextInfo()
     {
         if (FdmTextInfoText is null) return;
+        bool validationStatus = !playing && FdmTextStatusText.Text.Length > 0 && FdmTextStatusText.Text == FdmTextInfoText.Text;
+        var a = FdmTextInputValidation.Check(FdmTextATextBox.Text, "A");
+        var b = FdmTextInputValidation.Check(FdmTextBTextBox.Text, "B");
+        fdmTextsValid = a.Error is null && b.Error is null;
+        TransmitFdmTextButton.IsEnabled = fdmTextsValid && !playing;
+        void ShowInput(System.Windows.Controls.TextBlock label, FdmTextInputCheck input)
+        {
+            label.Text = input.Error ?? $"{input.ByteCount} / {FdmTextFrameBuilder.MaximumUtf8Bytes} bytes UTF-8";
+            label.Foreground = (System.Windows.Media.Brush)FindResource(input.Error is null ? "MutedBrush" : "WarningBrush");
+        }
+        ShowInput(TransmitABytesText, a); ShowInput(TransmitBBytesText, b);
+        if (!fdmTextsValid)
+        {
+            FdmTextInfoText.Text = string.Join("\n", new[] { a.Error, b.Error }.Where(error => error is not null));
+            if (validationStatus) FdmTextStatusText.Text = FdmTextInfoText.Text;
+            TransmitDurationText.Text = "Duración no disponible: corregí los canales indicados.";
+            return;
+        }
         try
         {
             var frames = new FdmTextFrameBuilder().Build(FdmTextATextBox.Text, FdmTextBTextBox.Text, UseHammingTransmitCheckBox.IsChecked == true);
+            TransmitABytesText.Text = $"{frames.ChannelA.Utf8ByteCount} / 8 bytes UTF-8";
+            TransmitBBytesText.Text = $"{frames.ChannelB.Utf8ByteCount} / 8 bytes UTF-8";
+            TransmitDurationText.Text = $"{frames.TotalSymbols * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s de transmisión";
             static string Describe(string name, FdmTextChannelFrame channel) =>
                 $"{name}: {channel.Utf8ByteCount} bytes UTF-8 · bloque original: {channel.OriginalBlockBitCount} bits · " +
                 (channel.UsesHamming ? $"bloque Hamming: {channel.EncodedBlockBitCount} bits · " : "sin Hamming · ") +
                 $"cabecera: {channel.HeaderBitCount} bits · trama real: {channel.RealBitCount} bits · relleno: {channel.PaddingBitCount} bits\n";
             FdmTextInfoText.Text = Describe("A", frames.ChannelA) + Describe("B", frames.ChannelB) +
                 $"Total: {frames.TotalSymbols} símbolos · duración conjunta: {frames.TotalSymbols * FdmBitstreamGenerator.SymbolDurationSeconds:0.0} s";
+            if (validationStatus) FdmTextStatusText.Text = "";
         }
-        catch (ArgumentException ex) { FdmTextInfoText.Text = ex.Message; }
+        catch (ArgumentException)
+        {
+            fdmTextsValid = false; TransmitFdmTextButton.IsEnabled = false;
+            FdmTextInfoText.Text = "No se pudo preparar la trama FDM. Revisá los textos de ambos canales.";
+            TransmitDurationText.Text = "Duración no disponible: no se pudo preparar una trama válida.";
+        }
     }
 
     private async void TransmitFdmText_Click(object sender, RoutedEventArgs e)
@@ -239,14 +271,17 @@ public partial class MainWindow : Window
         string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text;
         bool useHamming = UseHammingTransmitCheckBox.IsChecked == true;
         var profile = SelectedFdmProfile;
+        UpdateFdmTextInfo();
+        if (!fdmTextsValid) { FdmTextStatusText.Text = FdmTextInfoText.Text; return; }
         try { _ = new FdmTextFrameBuilder().Build(a, b, useHamming); }
-        catch (ArgumentException ex) { FdmTextStatusText.Text = ex.Message; return; }
+        catch (ArgumentException) { FdmTextStatusText.Text = "No se pudo preparar la trama FDM. Revisá los textos de ambos canales."; return; }
         SetPlaybackControls(false);
         FdmTextStatusText.Text = useHamming ? "Transmitiendo mensajes con Hamming (7,4)..." : "Transmitiendo mensajes sin Hamming...";
         CancellationToken token = windowLifetime.Token;
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, useHamming, profile), token);
+            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Mensajes FDM · {FdmAmplitudeProfiles.Get(profile).Label} · Hamming {(useHamming ? "activado" : "desactivado")}");
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmTextStatusText.Text = "Reproducción de mensajes finalizada (recepción aún no verificada).";
         }
@@ -306,7 +341,7 @@ public partial class MainWindow : Window
         PlayFdmFramesButton.IsEnabled = enabled;
         FdmTextATextBox.IsEnabled = enabled;
         FdmTextBTextBox.IsEnabled = enabled;
-        TransmitFdmTextButton.IsEnabled = enabled;
+        TransmitFdmTextButton.IsEnabled = enabled && fdmTextsValid;
         UseHammingTransmitCheckBox.IsEnabled = enabled;
     }
 
@@ -352,6 +387,7 @@ public partial class MainWindow : Window
     // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
     private void InvalidateAudioAnalysis()
     {
+        InvalidateObservedMonitor();
         const string pending = "Audio seleccionado cambiado. Pendiente de analizar esta grabación.";
         AnalysisResultText.Text = pending;
         DecodedSequenceText.Text = pending;
@@ -366,6 +402,7 @@ public partial class MainWindow : Window
         ReceivedFrameExplorer.Clear();
         MetricsAView.Clear(); MetricsBView.Clear();
         HammingWordTraceView.Clear();
+        TechnicalDiagnosticView.Clear();
         AnalysisPipelineText.Text = "Señal → bits → Hamming → CRC y mensaje: No disponible";
         waveformAudio = null;
         liveWaveformAudio = null;
@@ -388,9 +425,14 @@ public partial class MainWindow : Window
     private void RefreshCapture()
     {
         if (closing) return;
+        RefreshObservedMonitor();
         GeneralStateText.Text = captureBusy ? "Operando micrófono…" : capture.IsRecording ? "Capturando audio"
             : analyzing ? "Procesando audio…" : playing ? "Reproduciendo audio"
             : audioSelection.Current is null ? "Sin audio seleccionado" : "Audio seleccionado · sin operación activa";
+        var selectedAudio = audioSelection.Current;
+        WorkspaceAudioStatusText.Text = selectedAudio is null ? "Sin fuente de audio"
+            : $"{System.IO.Path.GetFileName(selectedAudio.Source)} · {selectedAudio.Audio.SampleRate} Hz · {selectedAudio.Audio.GetMetrics().DurationSeconds:0.00} s";
+        WorkspaceAudioStatusText.ToolTip = selectedAudio?.Source;
         var live = capture.IsRecording ? capture.Recording?.GetMetrics() : null;
         LiveCaptureText.Text = captureBusy ? "Iniciando o finalizando captura…" : live.HasValue
             ? $"Grabando · {live.Value.DurationSeconds:0.00} s de muestras · RMS {live.Value.Rms:G6} · pico {live.Value.Peak:G6}"
@@ -867,6 +909,7 @@ public partial class MainWindow : Window
         ExperimentChannelAText.Text = "Sin resultado · medición en curso";
         MetricsAView.Clear("Midiendo…"); MetricsBView.Clear("Midiendo…");
         HammingWordTraceView.Clear("Midiendo…");
+        TechnicalDiagnosticView.Clear("Midiendo…");
         AnalysisPipelineText.Text = "Análisis de la grabación en curso…";
         ExperimentChannelBText.Text = "Sin resultado · medición en curso";
         analyzing = true;
@@ -884,6 +927,7 @@ public partial class MainWindow : Window
             MetricsAView.Show(result.ChannelA, result.UsesHamming);
             MetricsBView.Show(result.ChannelB, result.UsesHamming);
             HammingWordTraceView.Show(result);
+            TechnicalDiagnosticView.Show(result, selected.Audio.GetStatus().Count);
             string Detected(FdmChannelExperiment c) => c.Before is { } b ? $"{b.ComparedBits}/{b.ExpectedCount} bits concluyentes" : "No disponible";
             string Crc(FdmChannelExperiment c) => c.Reception.CrcValid is true ? "válido" : c.Reception.CrcValid is false ? "inválido" : "no comprobado";
             AnalysisPipelineText.Text = $"1. Audio {result.AudioDurationSeconds:0.00} s · {result.SampleRate} Hz → " +
@@ -931,6 +975,7 @@ public partial class MainWindow : Window
                 ExperimentChannelAText.Text = ExperimentChannelBText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
                 MetricsAView.Clear(ExperimentSummaryText.Text); MetricsBView.Clear(ExperimentSummaryText.Text);
                 HammingWordTraceView.Clear(ExperimentSummaryText.Text);
+                TechnicalDiagnosticView.Clear(ExperimentSummaryText.Text);
                 AnalysisPipelineText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
             }
             CancelExperimentButton.IsEnabled = false;

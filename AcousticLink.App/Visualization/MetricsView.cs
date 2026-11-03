@@ -10,10 +10,16 @@ namespace AcousticLink.App.Visualization;
 public sealed class MetricsView : UserControl
 {
     private readonly StackPanel panel = new();
-    public MetricsView() { Content = panel; Clear(); }
+    private readonly Grid metrics = new();
+    public MetricsView()
+    {
+        var layout = new Grid(); layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); layout.RowDefinitions.Add(new RowDefinition());
+        layout.Children.Add(panel); Grid.SetRow(metrics, 1); layout.Children.Add(metrics); Content = layout;
+        metrics.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); metrics.RowDefinitions.Add(new RowDefinition()); Clear();
+    }
     public void Clear(string status = "Sin analizar")
     {
-        panel.Children.Clear(); panel.Children.Add(Text(status, 22));
+        panel.Children.Clear(); metrics.Children.Clear(); panel.Children.Add(Text(status, 22));
     }
     private static TextBlock Text(string value, double size = 14) => new()
     { Text = value, FontSize = size, Margin = new Thickness(0, 3, 0, 3) };
@@ -22,25 +28,26 @@ public sealed class MetricsView : UserControl
     {
         panel.Children.Clear();
         var reception = channel.Reception;
-        var status = Text(ReceptionView.MessageStatus(reception), 20);
-        status.Foreground = ReceptionView.MessageColor(reception); panel.Children.Add(status);
-        panel.Children.Add(Text(reception.Text ?? "Sin texto validado", 24));
-        panel.Children.Add(Text($"CRC: {(reception.CrcValid is true ? "VÁLIDO" : reception.CrcValid is false ? "INVÁLIDO" : "NO COMPROBADO")} · cabecera {(reception.HeaderValid ? "válida" : "no validada")}"));
-        var metrics = new StackPanel();
+        var outcome = new WrapPanel();
+        var status = Text(ReceptionView.MessageStatus(reception), 16);
+        status.Foreground = ReceptionView.MessageColor(reception);
+        var message = Text(reception.Text ?? "Sin texto validado", 24); message.Margin = new Thickness(0, 3, 12, 3);
+        outcome.Children.Add(message); outcome.Children.Add(status); panel.Children.Add(outcome);
+        panel.Children.Add(Text($"CRC: {(reception.CrcValid is true ? "VÁLIDO" : reception.CrcValid is false ? "INVÁLIDO" : "NO COMPROBADO")} · cabecera {(reception.HeaderValid ? "válida" : "no validada")}", 12));
         if (usesHamming)
         {
             var selector = new ComboBox { ItemsSource = new[] { "Antes · bits codificados", "Después · bits originales" }, SelectedIndex = 1, Margin = new Thickness(0, 4, 0, 6) };
-            selector.SelectionChanged += (_, _) => Comparison(metrics, selector.SelectedIndex == 0 ? channel.Before : channel.After, channel.Channel, true, selector.SelectedIndex == 1);
-            panel.Children.Add(selector); Comparison(metrics, channel.After, channel.Channel, true, true);
+            selector.SelectionChanged += (_, _) => Comparison(metrics, selector.SelectedIndex == 0 ? channel.Before : channel.After, channel, true, selector.SelectedIndex == 1);
+            panel.Children.Add(selector); Comparison(metrics, channel.After, channel, true, true);
         }
         else
         {
-            panel.Children.Add(Text("Bloque original · Hamming no aplicable")); Comparison(metrics, channel.Before, channel.Channel, false, false);
+            panel.Children.Add(Text("Bloque original · Hamming no aplicable")); Comparison(metrics, channel.Before, channel, false, false);
         }
-        panel.Children.Add(metrics);
+        WorkspaceMotion.Reveal(this);
     }
 
-    private static void Comparison(StackPanel panel, BitComparison? value, string channel, bool usesHamming, bool after)
+    private static void Comparison(Grid panel, BitComparison? value, FdmChannelExperiment channel, bool usesHamming, bool after)
     {
         panel.Children.Clear();
         if (value is null) { panel.Children.Add(Text("No calculable · sin alineación validada")); return; }
@@ -48,8 +55,10 @@ public sealed class MetricsView : UserControl
         void Indicator(string title, double? number, Brush color)
         {
             var cell = new StackPanel { Margin = new Thickness(0, 0, 12, 4) };
-            cell.Children.Add(Text(title));
-            cell.Children.Add(Text(number.HasValue ? number.Value.ToString("P2") : "No definida", 26));
+            var caption = Text(title); caption.ToolTip = title.StartsWith("BER") ? "Bits incorrectos / bits comparados. Los símbolos ? y faltantes no cuentan como errores; una BER cero no verifica el mensaje." : "Bits comparados / bits esperados. No equivale a éxito de recepción ni a CRC válido."; cell.Children.Add(caption);
+            var valueText = Text(number.HasValue ? number.Value.ToString("P2") : "No definida", number.HasValue ? 28 : 20);
+            if (number.HasValue) valueText.Style = (Style)Application.Current.FindResource("MetricValue");
+            cell.Children.Add(valueText);
             if (number.HasValue) cell.Children.Add(new ProgressBar { Minimum = 0, Maximum = 1, Value = number.Value, Height = 8, Foreground = color,
                 ToolTip = number.Value.ToString("G17") });
             indicators.Children.Add(cell);
@@ -57,17 +66,9 @@ public sealed class MetricsView : UserControl
         Indicator("BER observada", value.Ber, Brushes.Salmon);
         Indicator("Cobertura", value.Coverage, Brushes.LightSkyBlue);
         panel.Children.Add(indicators);
-        int[] counts = [value.ComparedBits - value.IncorrectBits, value.IncorrectBits, value.InconclusiveBits, value.MissingBits];
-        Brush[] colors = [Brushes.LightGreen, Brushes.Salmon, Brushes.Khaki, Brushes.SlateGray];
-        var composition = new Grid { Height = 14, Margin = new Thickness(0, 8, 0, 6) };
-        for (int i = 0; i < counts.Length; i++)
-        {
-            composition.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(counts[i], GridUnitType.Star) });
-            var segment = new Border { Background = colors[i] }; Grid.SetColumn(segment, i); composition.Children.Add(segment);
-        }
-        panel.Children.Add(composition);
-        panel.Children.Add(Text($"Correctos {counts[0]} · incorrectos {counts[1]} · '?' {counts[2]} · faltantes {counts[3]}"));
-        var map = new BitMapView(); map.ShowComparison(value, channel, usesHamming, after);
-        panel.Children.Add(new Expander { Header = $"Explorar {value.ExpectedCount} posiciones · comparados {value.ComparedBits}", Content = map });
+        var distribution = new BitDistributionView();
+        distribution.Show(value, channel.Channel, usesHamming, after, channel.Hamming?.Traces, channel.Reception);
+        Grid.SetRow(distribution, 1);
+        panel.Children.Add(distribution);
     }
 }

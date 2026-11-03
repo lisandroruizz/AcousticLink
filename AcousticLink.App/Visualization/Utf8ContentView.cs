@@ -19,6 +19,7 @@ public sealed class Utf8ContentView : UserControl
 
     public Utf8ContentView()
     {
+        byteDetail.VerticalAlignment = VerticalAlignment.Center;
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
         layout.ColumnDefinitions.Add(new ColumnDefinition());
         layout.RowDefinitions.Add(new RowDefinition()); layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -59,7 +60,7 @@ public sealed class Utf8ContentView : UserControl
             for (int i = 0; i < character.Bytes.Count; i++)
             {
                 int index = character.ByteOffset + i;
-                var byteButton = new Button { Content = new TextBlock { Text = $"{character.Bits.Split(' ')[i]}\n0x{character.Bytes[i]:X2}", FontFamily = new FontFamily("Consolas") },
+                var byteButton = new Button { Content = new TextBlock { Text = $"{character.Bits.Split(' ')[i]}\n0x{character.Bytes[i]:X2}", FontFamily = (FontFamily)FindResource("CodeFont") },
                     Tag = index, Padding = new Thickness(4, 2, 4, 2), Margin = new Thickness(0, 2, 0, 0) };
                 byteButton.Click += (_, _) => SelectByte(index); face.Children.Add(byteButton);
             }
@@ -68,7 +69,7 @@ public sealed class Utf8ContentView : UserControl
         }
         cardsPanel.Children.Add(row);
         cardsPanel.Children.Add(new TextBlock { Text = "Contenido completo · agrupado por bytes", Margin = new Thickness(0, 8, 0, 0) });
-        cardsPanel.Children.Add(new TextBlock { Text = string.Join(" ", characters.Select(c => c.Bits)), FontFamily = new FontFamily("Consolas") });
+        cardsPanel.Children.Add(new TextBlock { Text = string.Join(" ", characters.Select(c => c.Bits)), FontFamily = (FontFamily)FindResource("CodeFont") });
         SelectByte(0);
     }
     public void HighlightByte(int index)
@@ -91,7 +92,7 @@ public sealed class Utf8ContentView : UserControl
         byteDetail.Children.Add(new TextBlock { Text = "Contenido original validado, no símbolos codificados de siete." });
         map.WordTraces = channel.HammingDiagnostics?.Traces ?? Array.Empty<Hamming74WordTrace>();
         map.ShowSection(character.Bits.Split(' ')[local], channelName, channel.UsesHamming, channel.UsesHamming, 8 + index * 8, 8, "Ocho bits originales, MSB primero");
-        byteDetail.Children.Add(map); map.HighlightRange(8 + index * 8, 8); HighlightByte(index);
+        WorkspaceMotion.Reveal(byteDetail); byteDetail.Children.Add(map); map.HighlightRange(8 + index * 8, 8); HighlightByte(index);
         var explore = new Button { Content = "Localizar este byte en Trama", Margin = new Thickness(0, 8, 0, 0) };
         explore.Click += (_, _) => ExploreBytesRequested?.Invoke(index, 1); byteDetail.Children.Add(explore);
     }

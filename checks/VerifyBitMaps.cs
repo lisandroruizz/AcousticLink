@@ -54,7 +54,7 @@ var thread = new Thread(() =>
         var sync = new FdmSynchronizationResult(FdmSynchronizationState.Failed, null, null, null, null, "Sin cabecera");
         reception.Show(new(FdmTextReceiveState.HeaderNotSynchronized, false, null, null, null, null, "Sin cabecera"), sync, "A");
         Require(!Children<BitMapView>(reception).Any() && Texts(reception).Contains("Mensaje no recuperado") &&
-            Texts(reception).Contains("No comprobado"), "Sin sincronía no inventa bits ni CRC");
+            reception.DiagnosticText.Contains("CRC: NO COMPROBADO"), "Sin sincronía no inventa bits ni CRC");
         var actual = new BfskSequenceResult(Array.AsReadOnly(new[]
         {
             new BfskSymbolResult(0, 0, 4800, 960, 2880, new BfskDetectionResult(1, 0, 0, "")),
@@ -62,7 +62,17 @@ var thread = new Thread(() =>
         }));
         reception.Show(new(FdmTextReceiveState.InconclusiveBits, true, 1, null, null, actual, "No concluyente"), sync, "B");
         Require(!Children<BitMapView>(reception).Any(), "El mapa extenso vive en el explorador compartido, no en cada tarjeta");
-        reception.Clear(); Require(!Children<BitMapView>(reception).Any(), "Invalidación elimina bits");
+        var inspector = new ReceptionInspectorView { Channel = "B", Result = reception.Result };
+        Require(Texts(inspector).Contains("No comprobado") && !Texts(inspector).Contains("Mensaje válido"), "Inspector distingue CRC no comprobado y recepción incompleta");
+        foreach (bool? crc in new bool?[] { true, false, null })
+        {
+            inspector.Result = reception.Result! with { State = crc is true ? FdmTextReceiveState.Valid : crc is false ? FdmTextReceiveState.CrcIncorrect : FdmTextReceiveState.InconclusiveBits,
+                CrcValid = crc, Text = crc is true ? "ñ" : null };
+            Require(Texts(inspector).Contains(ReceptionInspectorView.CrcLabel(crc)), "Tres estados CRC sin inventar datos");
+        }
+        inspector.Result = null;
+        Require(Texts(inspector).Contains("Sin analizar"), "Inspector vacío ofrece una siguiente acción");
+        reception.Clear(); Require(!Children<BitMapView>(reception).Any() && reception.Result is null && reception.SummaryText == "Sin analizar", "Invalidación elimina bits y proyecciones visuales");
         app.Shutdown();
     }
     catch (Exception ex) { failure = ex; }
