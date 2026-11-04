@@ -1,44 +1,73 @@
 # Monitor real de señales y portadoras FDM
 
-El **Panel general → Monitor de señales** muestra la forma de onda y un mapa limitado a las cuatro portadoras de AcousticLink. El Emisor tiene una vista **Señal generada** con el mismo control. No es un espectrograma completo ni un receptor adicional.
+El Panel general contiene una miniatura funcional y el monitor completo. El Emisor conserva su vista de señal generada, las contribuciones A/B y la preparación sin reproducción. Todas las vistas utilizan muestras publicadas por captura o salida; no animan señales ficticias.
 
-## Fuentes y trazabilidad
+## Captura en curso
 
-- **Audio seleccionado**: instantánea de una captura de micrófono finalizada o de las muestras originales de un WAV importado. Conserva su tasa real. No se procesa el espectro durante la captura.
-- **Señal digital generada**: el mismo arreglo preparado por el generador FDM y entregado a reproducción, sin regenerarlo. Se conserva también si la reproducción falla: representa audio preparado, no prueba de emisión acústica ni de recepción. Su descripción guarda el modo y el perfil utilizados al generarlo.
-- Una nueva captura o una importación correcta invalida el monitor del audio anterior. Una importación fallida lo conserva. El último buffer generado es una fuente independiente.
+Un temporizador WPF de 50 ms solicita novedades. Una sola tarea de observación puede estar activa: si sigue trabajando, no se encola otra. CopySamples lee únicamente el sufijo publicado por CapturedAudio. El callback de NAudio no dibuja ni calcula energía.
 
-No se deduce el perfil del emisor a partir de un WAV. El monitor no usa referencias experimentales ni altera resultados, muestras, WAV o CSV.
+IncrementalSignalMonitor conserva un historial float acotado a la capacidad original (máximo 30 s), un resumen mín/máx incremental y las ventanas de energía ya terminadas. Se utiliza un buffer incremental completo, no un anillo que descartaría los intervalos que el usuario quiere inspeccionar. Las muestras publicadas no se sobrescriben. La memoria de observación es independiente del audio usado por el receptor.
 
-## Cálculo de energía
+Se calculan las cuatro portadoras con el Goertzel compartido, ventanas rectangulares de 20 ms y paso 10 ms. Solo se procesan ventanas completas nuevas, sin recalcular el prefijo ni utilizar muestras futuras. La cola menor de 20 ms espera datos nuevos; el análisis final puede incluirla según el tratamiento habitual del monitor estático.
 
-`CarrierEnergyMap` reutiliza `GoertzelEnergy.Estimate`, sin modificarlo y sin invocar criterios de decisión del detector. Calcula potencia en 1200, 1900, 3000 y 3700 Hz sobre ventanas rectangulares de aproximadamente **20 ms**, separadas por **10 ms**, usando números de muestras redondeados según la tasa real. A 44.100 y 48.000 Hz ambas duraciones son exactas. La última ventana se ancla al final si es necesario. Un audio más corto utiliza las muestras que realmente existen, e informa ese soporte en el cursor.
+## Ventana móvil e inspección
 
-Se resta la media únicamente dentro del cálculo de energía; no se modifica el audio. La estimación es `2 × |proyección|² / N²`: un seno ideal de amplitud A produce aproximadamente A²/2. Hay fuga y efectos de borde, especialmente cerca de transiciones; la presencia de energía no certifica un bit válido.
+El selector permite los últimos 1, 2, 3 o 5 segundos y Desde el inicio. El extremo derecho coincide con el último número de muestra publicado, no con tiempo inventado. La escala vertical es original ±1 o pico real con margen del 10 %, únicamente visual.
 
-El color usa una escala fija **−100 a 0 dB digitales**, `10 log10(P/1)`. No hay normalización por grabación ni por canal. Cero corresponde a −∞. El piso y techo solo limitan el color: el inspector conserva los valores numéricos reales, incluso por debajo del piso. No son dB SPL ni una calibración del micrófono.
+Navegar manualmente suspende el seguimiento visual, pero no el micrófono ni la reproducción. Volver al vivo / pausar reanuda o pausa el seguimiento. Se conservan zoom alrededor del mouse (Ctrl+rueda), selección izquierda, pan central o Mayús+arrastre, Mayús+rueda, botones, intervalos escritos y navegador completo. Los campos Vista reflejan los límites efectivamente dibujados. El cursor consulta las ventanas calculadas más cercanas.
 
-Cada ventana ocupa visualmente la región más cercana a su centro. Si varias ventanas caen en un píxel, se representa el máximo por portadora para conservar actividad breve. El cursor informa las energías de la ventana más cercana y sus límites reales; no calcula una medición instantánea por muestra. Azul identifica A y naranja identifica B, sin clasificar recepción correcta o incorrecta.
+## Reproducción
 
-## Exploración
+AudioPlaybackService publica una instantánea de progreso consultando WasapiPlayer.GetPosition cada 40 ms. Convierte bytes del formato de salida a muestras de la señal fuente; no usa un cronómetro independiente para avanzar. Si el reloj falla, publica explícitamente la cantidad leída por la ruta de reproducción: puede adelantar por buffering y se identifica en el monitor. Esta alternativa nunca representa una medición acústica.
 
-- Clic en cualquiera de los gráficos: cursor común y cuatro energías.
-- Arrastre: selección temporal resaltada en ambos gráficos.
-- **Ampliar intervalo**: ajusta ambos ejes horizontales al intervalo; también se pueden escribir los tiempos en segundos.
-- **＋ / −**: zoom alrededor del cursor; **Ver completa**: restaura la duración total.
-- Flechas izquierda/derecha con el gráfico enfocado: mover el cursor.
-- Escala vertical original ±1 o ajuste al pico global con margen del 10 %. El silencio usa ±1. El ajuste solo cambia el gráfico.
+El monitor solo incorpora el prefijo indicado por ese contador. Comparte los mismos resúmenes entre la miniatura y el monitor completo, y deja de seguir al terminar o cancelar. El buffer digital completo se conserva para inspección posterior. Las contribuciones A/B se obtienen con los parámetros y el generador existentes y se habilitan solo si A+B coincide exactamente, muestra por muestra, con el buffer compuesto. Durante reproducción se limitan también al prefijo publicado. No se separan ondas A/B de un micrófono o WAV.
 
-La forma de onda completa conserva mínimos y máximos de hasta 1600 grupos, con el mismo criterio que `WaveformView`. Para intervalos de hasta 1600 muestras se dibujan los puntos originales y líneas que los conectan; no se crean muestras intermedias. El mapa mantiene su resolución de análisis de 20/10 ms aunque se amplíe hasta observar las oscilaciones temporales.
+## Mapa y miniatura
 
-## Rendimiento y cancelación
+El mapa representa únicamente energía en 1200/1900 Hz (A azul) y 3000/3700 Hz (B naranja), no un espectrograma completo ni decisiones de bits. La escala fija es −100 a 0 dB digitales, 10 log10(P/1); cero es −∞. El color limita ese rango pero el inspector conserva la energía real. No son dB SPL, umbrales de recepción ni normalización del audio.
 
-La instantánea del audio finalizado, la reducción inicial y Goertzel se calculan fuera del hilo WPF. La captura y su callback no cambian. Se conserva un mapa por fuente (seleccionada y generada), compartido entre vistas. Mover el cursor consulta ventanas almacenadas; no vuelve a analizar audio. La geometría del mapa se conserva hasta cambiar fuente, zoom o tamaño. Un zoom prepara solo la reducción temporal visible en una tarea cancelable.
+La miniatura recibe el mismo resumen visible ya calculado por el monitor completo mediante FrameDisplayed. No vuelve a ejecutar Goertzel ni copia el audio. Identifica micrófono, salida digital o WAV, estado y rango temporal. Al detener conserva la vista final. Un WAV es estático: importarlo no inicia reproducción ni captura. Las importaciones fallidas conservan la selección previa y sus resultados.
 
-**Cancelar monitor** cancela únicamente la observación; no detiene captura, reproducción o recepción. **Analizar / reintentar** utiliza la misma fuente. El cierre cancela las tareas mediante la vida de la ventana. Los resultados obsoletos se descartan al cambiar la fuente. El monitor admite el límite actual de 30 segundos.
+## Comprobaciones y límites
 
-## Verificación
+VerifyLiveSignalMonitor comprueba incrementos, capacidad, ventanas idénticas al análisis completo, snapshots estables, silencio, cancelación y reinicio a 44.100/48.000 Hz. VerifySignalMonitor comprueba seguimiento/pausa, navegación, fuentes, vista previa y miniatura, incluyendo una ruta de salida con contador simulado (no hardware).
 
-`checks/VerifySignalMonitor.cs` comprueba portadoras simultáneas, perfiles y tasas, silencio, bajo nivel, límites temporales, picos, muestras intactas, cancelación/reintento, origen de archivos y buffers, selección/zoom, invalidación y conservación de las decisiones del módem. Puede recibir una ruta PNG para renderizar un ensayo sintético WPF fuera de pantalla.
+Se comprobó además una reproducción real FDM en la aplicación: la miniatura avanzó hasta el intervalo 5,002–8,002 s. En una captura real a 48 kHz se observó el monitor en 6,57–9,57 s, con energía incremental, y la detención a 10 s conservó el audio completo. Esto verifica visualización y rutas de audio, no la recuperación acústica de mensajes.
 
-Pendiente de comprobación manual: captura física, interacción de arrastre y teclado, reproducción real, legibilidad y controles a 1366×768 / 1920×1080 y escalado Windows 125 %. Las comprobaciones sintéticas y el renderizado fuera de pantalla no validan una transmisión acústica real.
+Pendiente: ensayos prolongados a 30 s, carga elevada, otros dispositivos/tasas, desconexión y cancelación de salida, pausa/reanudación visual con mouse, Windows al 125 % y validación acústica de CRC/BER. La cadencia objetivo es 20 refrescos/s; se omiten solicitudes si una tarea sigue ocupada. No se añadió reproducción de WAV ni decodificación de bits en streaming.
+
+## Miniatura con dos escalas
+
+La tarjeta Señal actual dibuja un detalle de aproximadamente 10 ms de muestras originales de A+B, conectado sin suavizado, con límites verticales derivados del pico local y margen de 10 %. No utiliza las contribuciones individuales seleccionadas en el monitor grande. La ventana sigue el prefijo publicado por captura o la posición de reproducción existente; no introduce otro temporizador. Para WAV/preparación estáticos se muestra inicialmente el comienzo (o el cursor de inspección disponible).
+
+La zona global reutiliza Overview, el resumen mín/máx completo ya preparado. Durante una emisión usa el mapa completo generado en cuanto está disponible; mientras se prepara ese mapa solo muestra el prefijo real disponible. Su cursor indica el progreso sobre la duración total. Al finalizar conserva el buffer global y la posición publicada, sin seguir avanzando. La miniatura mantiene origen digital/micrófono/WAV y estado explícitos.
+
+## Cómo se forma FDM
+
+El monitor ofrece dos herramientas: Señal y energía conserva la vista habitual; Cómo se forma FDM utiliza una ventana inicial de 10 ms y dibuja simultáneamente A, B y A+B sobre una escala común. Lee los mismos arreglos digitales verificados, con sus fases, ganancias y rampas; no sintetiza otra onda ni separa audio acústico. Para intervalos largos usa reducción mín/máx en segundo plano.
+
+Los bits, frecuencias nominales y número de símbolo proceden de FdmTransmissionInfo, metadatos de solo lectura de las secuencias exactas entregadas al generador. Cuando existe una trama de texto, se conservan los FdmTextFrames construidos con los mismos parámetros. Los campos preámbulo/marcador/longitud/UTF-8/CRC/relleno se calculan desde sus longitudes reales: con Hamming solo longitud/datos/CRC se expanden 4→7. Cabecera y relleno quedan fuera. Las secuencias o tonos de prueba no se presentan como tramas UTF-8.
+
+Las dos bandas de protocolo muestran la trama completa conocida por el Emisor, proporcional a símbolos, con cursor y marco del intervalo ampliado. Un clic explora ese instante; durante reproducción no permite acceder a muestras todavía no publicadas. El ToolTip ofrece los rangos exactos de símbolos y segundos de cada campo. En las ondas se marcan los límites de símbolos visibles. El contexto de bit/frecuencia corresponde a la muestra visible más cercana al cursor si este quedó fuera del zoom.
+
+Las cuatro tarjetas A0/A1/B0/B1 consultan la misma ventana real de Goertzel que el cursor del monitor. El brillo representa energía, no confirma recepción ni un bit válido. Captura/WAV muestran su onda real y mapa; la herramienta didáctica indica que A/B originales no están disponibles.
+
+VerifyFdmFormation verifica segmentación, símbolos, frecuencias, UTF-8 de 1–8 bytes, Hamming y relleno. VerifySignalMonitor comprueba que los metadatos llegan a la vista previa y que la herramienta comparte zoom/cursor. Se revisó un renderizado fuera de pantalla con datos sintéticos; quedan pendientes la interacción real, reproducción/captura prolongada y DPI al 125 % de esta nueva herramienta.
+
+## Monitor del Receptor: real e interpretado
+
+Receptor → Monitor de recepción comparte los mapas y prefijos publicados de captura/salida, manteniendo sus propios controles de inspección. La fuente digital de salida se identifica como digital; no se la presenta como micrófono. Se conservan Señal y energía y se agrega Cómo la interpreta. La miniatura incorpora actividad A0/A1/B0/B1 a partir de las mismas ventanas de energía.
+
+ReceiverObservation llama al FdmToneDetector existente, con parámetros predeterminados intactos, sobre una ventana real de hasta 60 ms. Con menos de 40 ms conserva el diagnóstico de fragmento insuficiente. A tiempo cero de un archivo finalizado puede usar el primer tramo disponible; el soporte exacto se muestra. Las decisiones son hipótesis de ventana deslizante, no símbolos sincronizados ni bits CRC válidos. Las energías del mapa continúan usando ventanas de 20 ms: tienen otro soporte temporal. No se calcula una probabilidad de confianza; los diagnósticos conservan motivo y diferencia de energía.
+
+La vista didáctica dibuja un detalle real de 10 ms y senoides hipotéticas de frecuencia nominal y amplitud raíz(2E). La fase cero es elegida para la ilustración: NO se estima la fase acústica ni se separan los canales originales. Si un canal es ?, no se inventa su onda ni la suma completa. Esta representación nunca alimenta la recepción, Hamming, CRC o métricas.
+
+La orquestación ejecuta FdmTextReceiver sin cambios sobre prefijos inmutables, aproximadamente cada segundo desde que existen 2,4 s, con una sola tarea activa y el último prefijo pendiente, cancelable al cambiar audio/opciones/cerrar. Las opciones Hamming/borrados proceden de Recepción. El resultado de monitoreo es independiente del resultado final de los botones Recibir/Medir y no se exporta al CSV. Repetir la búsqueda puede consumir CPU en grabaciones largas; el audio y los gráficos no esperan su finalización.
+
+Antes de localizar una cabecera no se atribuyen campos temporales. Tras validarla se ubican preámbulo, marcador y longitud; datos/CRC solo con longitud leída en rango. Esos límites son estimaciones del receptor y los campos futuros se atenúan. Relleno solo se marca como esperado cuando ambos CRC son válidos y sus longitudes difieren; no se afirma que esos bits de relleno hayan sido verificados. La sincronización ambigua oculta la segmentación. No se usan textos de referencia ni los metadatos de transmisión para ubicar campos. Por ello no puede mostrarse un preámbulo validado mientras aún está llegando su primera parte.
+
+Recorrer análisis (sin audio) desplaza el cursor por muestras de una grabación finalizada, con pausa e inspección manual. Es un recorrido visual explícito, no reproducción WAV ni recepción en vivo ficticia. Los resultados de trama corresponden al análisis ya disponible; no se animan supuestos pasos internos del algoritmo.
+
+Las nuevas comprobaciones cubren igualdad con el detector, hipótesis dudosas, ventanas y fuentes, campos parciales, longitudes desconocidas, Hamming, independencia y sincronización ambigua. Se revisó un renderizado WPF con un WAV sintético. Pendiente para esta nueva vista: parlante/micrófono, seguimiento y pausa reales, carga a 30 s, desconexiones y DPI 125 %. No se afirma validación acústica del mensaje.
+
+**Actualización del laboratorio del Receptor:** las senoides interpretativas descritas en la sección histórica anterior fueron eliminadas de la interfaz. La implementación vigente, las trazas de criterio y la reconstrucción por símbolo se documentan en [DemodulationLab.md](DemodulationLab.md).

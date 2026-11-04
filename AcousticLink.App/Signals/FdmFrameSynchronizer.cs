@@ -80,7 +80,14 @@ public sealed class FdmFrameSynchronizer
             if (position == end) break;
         }
 
-        double start = best.Position / (double)sampleRate;
+        return Recover(samples, sampleRate, best.Position, dataBitCount, cancellationToken);
+    }
+
+    private FdmSynchronizationResult Recover(ReadOnlySpan<float> samples, int sampleRate, int position,
+        int dataBitCount, CancellationToken cancellationToken)
+    {
+        string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
+        double start = position / (double)sampleRate;
         double dataStart = start + header.Length * FdmSequenceDecoder.SymbolDurationSeconds;
         var recovered = dataBitCount == 0 ? decoder.DecodeHeaders(samples, sampleRate, start, cancellationToken)
             : decoder.DecodeFrameSymbols(samples, sampleRate, start, dataBitCount);
@@ -98,6 +105,66 @@ public sealed class FdmFrameSynchronizer
                 ? dataBitCount == 0 ? "Ambas cabeceras validadas; longitud y datos todavía no analizados."
                     : "Ambas cabeceras validadas. Los datos conservan sus '?' y no tienen verificación de integridad."
                 : "Solo una cabecera es válida: inicio estimado desde ese canal. Los datos del otro canal no están sincronizados de forma validada.");
+    }
+
+    // Conserva la grilla gruesa, agrupación y refinamiento del método manual.
+    // Solo evalúa nuevos inicios completos; el extremo no alineado se incorpora al finalizar.
+    public HeaderSearch CreateHeaderSearch(int sampleRate) => new(this, sampleRate);
+    public sealed class HeaderSearch
+    {
+        private readonly FdmFrameSynchronizer owner;
+        private readonly int rate, coarse, fine, headerSamples;
+        private readonly List<Candidate> groups = [];
+        private int next, lastMatch = -1, previousCount;
+        private Candidate? refinedFrom;
+        private FdmSynchronizationResult? cached;
+        public int EvaluatedStarts { get; private set; }
+        internal HeaderSearch(FdmFrameSynchronizer owner, int rate)
+        {
+            if (rate <= 2 * FdmToneMixer.ChannelBBit1Frequency) throw new ArgumentOutOfRangeException(nameof(rate));
+            this.owner = owner; this.rate = rate;
+            coarse = Math.Max(1, (int)Math.Round(CoarseStepSeconds * rate));
+            fine = Math.Max(1, (int)Math.Round(FineStepSeconds * rate));
+            headerSamples = (int)Math.Round(FdmBitstreamGenerator.HeaderBits * FdmSequenceDecoder.SymbolDurationSeconds * rate);
+        }
+        public FdmSynchronizationResult Advance(ReadOnlySpan<float> samples, bool final = false, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (samples.Length < previousCount) throw new ArgumentException("El prefijo no puede retroceder.");
+            previousCount = samples.Length;
+            int last = samples.Length - headerSamples;
+            string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
+            void Add(Candidate? candidate, int position)
+            {
+                if (candidate is null) return;
+                if (lastMatch < 0 || position - lastMatch > FdmSequenceDecoder.SymbolDurationSeconds * rate) groups.Add(candidate);
+                else if (Better(candidate, groups[^1])) groups[^1] = candidate;
+                lastMatch = position;
+            }
+            while (next <= last)
+            {
+                token.ThrowIfCancellationRequested();
+                Add(owner.Evaluate(samples, rate, next, header, token), next); EvaluatedStarts++; next += coarse;
+            }
+            if (final && last >= 0 && last % coarse != 0) { Add(owner.Evaluate(samples, rate, last, header, token), last); EvaluatedStarts++; }
+            if (groups.Count == 0) return Failure("Buscando cabecera: todavía no hay una cabecera válida completa.");
+            if (groups.Count > 1) return Failure("Sincronización ambigua: varias cabeceras separadas.") with { IsAmbiguous = true };
+            // Esperar a que cierre el grupo evita fijar el borde inicial de una cabecera todavía incompleta.
+            if (!final && last < lastMatch + (int)Math.Ceiling(.1 * rate) + coarse)
+                return Failure("Candidata completa en evaluación temporal; cabecera todavía no confirmada.");
+            var best = groups[0];
+            if (!final && best == refinedFrom && cached is not null) return cached;
+            refinedFrom = best;
+            int begin = Math.Max(0, best.Position - coarse), end = Math.Min(last, best.Position + coarse);
+            for (int position = begin; ; position = Math.Min(end, position + fine))
+            {
+                token.ThrowIfCancellationRequested();
+                var candidate = owner.Evaluate(samples, rate, position, header, token);
+                if (candidate is not null && Better(candidate, best)) best = candidate;
+                if (position == end) break;
+            }
+            return cached = owner.Recover(samples, rate, best.Position, 0, token);
+        }
     }
 
     private Candidate? Evaluate(ReadOnlySpan<float> samples, int rate, int position, string header, CancellationToken token)

@@ -10,7 +10,7 @@ namespace AcousticLink.App.Visualization;
 public sealed class ReceptionView : UserControl
 {
     public event Action? TextRequested;
-    public static string MessageStatus(FdmTextChannelResult channel) => channel.State switch
+    public static string MessageStatus(FdmTextChannelResult channel) => channel.IsReceiving ? channel.HeaderValid ? "Recibiendo mensaje" : "Buscando cabecera" : channel.State switch
     {
         FdmTextReceiveState.Valid => "Mensaje válido",
         FdmTextReceiveState.CrcIncorrect or FdmTextReceiveState.InvalidUtf8 or FdmTextReceiveState.InvalidLength => "Mensaje inválido",
@@ -43,6 +43,7 @@ public sealed class ReceptionView : UserControl
     private static TextBlock Label(string text, double size = 14) => new() { Text = text, FontSize = size, Margin = new Thickness(0, 2, 0, 2) };
     public void Show(FdmTextChannelResult channel, FdmSynchronizationResult synchronization, string channelName = "sin identificar")
     {
+        bool changed = Result?.State != channel.State || Result?.Text != channel.Text;
         SetValue(ResultPropertyKey, channel);
         SetValue(SummaryTextPropertyKey, $"{(channel.State == FdmTextReceiveState.Valid ? channel.Text : MessageStatus(channel))}\nCRC: {ReceptionInspectorView.CrcLabel(channel.CrcValid)}");
         panel.Children.Clear();
@@ -63,7 +64,7 @@ public sealed class ReceptionView : UserControl
         SetValue(DiagnosticTextPropertyKey, $"Canal {channelName} · {MessageStatus(channel)}\nSincronización: {synchronization.State} · cabecera: {sync}\nDatos: {data} · longitud leída: {channel.ByteLength?.ToString() ?? "No disponible"} bytes\n" +
             $"Concluyentes: {channel.Block?.ConclusiveCount.ToString() ?? "No disponible"} · '?': {channel.Block?.InconclusiveCount.ToString() ?? "No disponible"}\n" +
             (channel.UsesHamming ? $"Hamming activo · recuperación {(channel.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")} · {h?.WordCount.ToString() ?? "No disponible"} palabras · {hamming} · {(channel.HammingCoversCompleteBlock ? "bloque completo" : "solo longitud o fragmento")}\n" : "Hamming desactivado\n") +
-            $"CRC: {crc}\n{channel.Reason}\nProcesamiento posterior de la grabación.");
-        WorkspaceMotion.Reveal(this);
+            $"CRC: {crc}\n{channel.Reason}\n{(channel.IsReceiving ? "Procesamiento incremental de muestras recibidas." : "Procesamiento del bloque recibido.")}");
+        if (changed) WorkspaceMotion.Reveal(this);
     }
 }

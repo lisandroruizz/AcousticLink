@@ -1,6 +1,8 @@
 namespace AcousticLink.App.Signals;
 
 public sealed record FdmDetectionResult(BfskDetectionResult ChannelA, BfskDetectionResult ChannelB);
+public sealed record FdmDecisionDiagnostics(double DurationSeconds, double MinimumDurationSeconds,
+    double MinimumToneEnergy, double MinimumEnergyRatio, bool DurationAccepted, bool? EnergyAccepted, bool? RatioAccepted);
 
 public sealed class FdmToneDetector
 {
@@ -35,7 +37,8 @@ public sealed class FdmToneDetector
         }
         if (samples.Length / (double)sampleRate < MinimumDurationSeconds)
         {
-            var insufficient = new BfskDetectionResult(0, 0, null, "Fragmento insuficiente.");
+            var insufficient = new BfskDetectionResult(0, 0, null, "Fragmento insuficiente.")
+            { FdmDiagnostics = new(samples.Length / (double)sampleRate, MinimumDurationSeconds, MinimumToneEnergy, MinimumEnergyRatio, false, null, null) };
             return new(insufficient, insufficient);
         }
         mean /= samples.Length;
@@ -43,17 +46,20 @@ public sealed class FdmToneDetector
         double a1 = GoertzelEnergy.Estimate(samples, mean, sampleRate, FdmToneMixer.ChannelABit1Frequency);
         double b0 = GoertzelEnergy.Estimate(samples, mean, sampleRate, FdmToneMixer.ChannelBBit0Frequency);
         double b1 = GoertzelEnergy.Estimate(samples, mean, sampleRate, FdmToneMixer.ChannelBBit1Frequency);
-        return new(Decide(a0, a1), Decide(b0, b1));
+        return new(Decide(a0, a1, samples.Length / (double)sampleRate), Decide(b0, b1, samples.Length / (double)sampleRate));
     }
 
-    private BfskDetectionResult Decide(double energy0, double energy1)
+    private BfskDetectionResult Decide(double energy0, double energy1, double duration)
     {
         double strongest = Math.Max(energy0, energy1);
         double weakest = Math.Min(energy0, energy1);
+        var diagnostics = new FdmDecisionDiagnostics(duration, MinimumDurationSeconds, MinimumToneEnergy, MinimumEnergyRatio,
+            true, strongest >= MinimumToneEnergy, strongest < MinimumToneEnergy ? null : strongest >= MinimumEnergyRatio * weakest);
+        BfskDetectionResult Result(int? bit, string reason) => new(energy0, energy1, bit, reason) { FdmDiagnostics = diagnostics };
         if (strongest < MinimumToneEnergy)
-            return new(energy0, energy1, null, "Canal ausente o demasiado débil.");
+            return Result(null, "Canal ausente o demasiado débil.");
         if (strongest < MinimumEnergyRatio * weakest)
-            return new(energy0, energy1, null, "Ambigua: energías similares dentro del canal.");
-        return new(energy0, energy1, energy0 > energy1 ? 0 : 1, "Tono identificado en este canal.");
+            return Result(null, "Ambigua: energías similares dentro del canal.");
+        return Result(energy0 > energy1 ? 0 : 1, "Tono identificado en este canal.");
     }
 }

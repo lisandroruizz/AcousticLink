@@ -1,6 +1,9 @@
 namespace AcousticLink.App.Signals;
 
-public sealed record BfskDetectionResult(double Energy0, double Energy1, int? Bit, string Reason);
+public sealed record BfskDetectionResult(double Energy0, double Energy1, int? Bit, string Reason)
+{
+    public FdmDecisionDiagnostics? FdmDiagnostics { get; init; }
+}
 
 public sealed class BfskToneDetector
 {

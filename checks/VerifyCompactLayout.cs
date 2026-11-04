@@ -71,12 +71,46 @@ var thread = new Thread(() =>
         ((TextBlock)window.FindName("AnalysisConfigurationWarning")).Text = "Ensayo sintético · resultados reales del analizador · no captura física";
         tabs.SelectedIndex = 2; Pump();
         var receiverTools = (TabControl)window.FindName("ReceiverTools");
-        Require(((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).FitWorkspace && receiverTools.Items.Count == 2, "Explorador utiliza la altura del workspace");
+        Require(((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).FitWorkspace && receiverTools.Items.Count == 3, "Explorador utiliza la altura del workspace");
         var toggle = (System.Windows.Controls.Primitives.ToggleButton)window.FindName("ReceiverInspectorToggle");
         toggle.IsChecked = false; toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
         Require(((Border)window.FindName("ReceiverInspector")).Visibility == Visibility.Collapsed, "Inspector ocultable sin perder resultados");
         toggle.IsChecked = true; toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-workspace.png"));
+        {
+            receiverTools.SelectedIndex = 2; Pump();
+            var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");
+            var recorded = CarrierEnergyMap.Analyze(new(samples, 48000, MonitorSignalOrigin.ImportedWav, "WAV sintético de interfaz"));
+            monitor.Show(recorded); monitor.SetReception(received, recorded.Signal.Duration); monitor.SetCursor(3.25);
+            var monitorTools = (TabControl)typeof(SignalMonitorView).GetField("signalTools", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(monitor)!;
+            monitorTools.SelectedIndex = 0; monitor.Zoom(3.2, 3.5); monitor.SelectInterval(3.2, 3.3); monitor.SetCursor(3.25); Pump();
+            if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-simbolos.png"));
+            monitorTools.SelectedIndex = 2; Pump();
+            var lab = (ReceiverInterpretationView)typeof(SignalMonitorView).GetField("interpretation", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(monitor)!;
+            T Part<T>(string name) => (T)typeof(ReceiverInterpretationView).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(lab)!;
+            int firstNumber = lab.Selection!.Trace!.Number;
+            Part<Button>("next").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
+            Require(lab.Selection?.Trace?.Number == firstNumber + 1, "Siguiente actualiza ventana, energías y selección real");
+            Part<Button>("previous").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
+            Require(lab.Selection?.Trace?.Number == firstNumber, "Anterior restaura símbolo");
+            monitorTools.SelectedIndex = 0; monitorTools.SelectedIndex = 2; Pump();
+            Require(lab.Selection?.Trace?.Number == firstNumber, "Cambiar de vista conserva selección");
+            Require(!Part<Button>("firstUnknown").IsEnabled && !Part<Button>("nextUnknown").IsEnabled && !Part<Button>("problem").IsEnabled, "Accesos sin coincidencias deshabilitados");
+            Part<ComboBox>("channel").SelectedIndex = 1;
+            var crcSymbol = ReceivedSymbols.From(received, true, 48000).First(t => t.Number == 110);
+            monitor.SetCursor((crcSymbol.Symbol.AnalysisStartSample + crcSymbol.Symbol.AnalysisSampleCount / 2.0) / 48000); Pump();
+            Require(lab.Selection!.Trace!.ChannelB && Part<TextBlock>("field").Text == "Campo CRC-32" && Part<TextBlock>("decoded").Text.StartsWith("Nibble decodificado:"), "CRC de B se identifica como campo y nibble, nunca como contenido UTF-8");
+            foreach (var size in new[] { new Size(1366, 768), new Size(1920, 1080), new Size(1366 / 1.25, 768 / 1.25) })
+            {
+                window.Width = size.Width; window.Height = size.Height; Pump();
+                Require(lab.ActualWidth > 650 && lab.ActualHeight > 150 && Part<Button>("next").ActualWidth > 10, "Laboratorio adaptable en tamaños habituales y equivalencia lógica 125 %");
+            }
+            window.Width = 1366; window.Height = 768; Pump();
+            if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-interpretacion.png"));
+            monitor.Clear(); Pump();
+            Require(lab.Selection is null && !Part<Button>("next").IsEnabled && Part<TextBlock>("field").Text == "", "Cambiar fuente invalida selección y navegación");
+            receiverTools.SelectedIndex = 0; toggle.IsChecked = true; toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
+        }
         var inspectorTabs = (TabControl)window.FindName("ReceiverInspectorTabs");
         var detailTabs = (TabControl)window.FindName("ReceiverDetailTabs");
         inspectorTabs.SelectedIndex = 1; detailTabs.SelectedIndex = 0; Pump();
@@ -110,7 +144,7 @@ var thread = new Thread(() =>
         var waveform = (WaveformView)window.FindName("ReceivedWaveform");
         var receiverRoot = (Grid)window.FindName("ReceiverWorkspace");
         var channelView = (ReceptionView)window.FindName("ReceptionAView");
-        Require(waveform.TransformToAncestor(receiverRoot).Transform(new Point(0, waveform.ActualHeight)).Y <= channelView.TransformToAncestor(receiverRoot).Transform(new Point(0, 0)).Y, "La forma de onda no invade los resultados");
+        Require(!((Expander)window.FindName("CaptureInstrumentationDetails")).IsExpanded && !waveform.IsVisible && channelView.ActualHeight > 0, "Instrumentación secundaria cerrada; no se duplica la onda principal sobre los resultados");
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-logical125.png"));
         tabs.SelectedIndex = 3; inner.SelectedIndex = 0; Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "analisis-logical125.png"));

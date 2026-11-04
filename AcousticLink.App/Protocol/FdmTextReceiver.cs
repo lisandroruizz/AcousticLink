@@ -11,6 +11,7 @@ public enum FdmTextReceiveState
 public sealed record FdmTextChannelResult(FdmTextReceiveState State, bool HeaderValid, int? ByteLength,
     bool? CrcValid, string? Text, BfskSequenceResult? Block, string Reason)
 {
+    public bool IsReceiving { get; init; }
     public bool UsesHamming { get; init; }
     public bool ErasureRecoveryEnabled { get; init; }
     public Hamming74DecodeResult? HammingDiagnostics { get; init; }
@@ -31,6 +32,12 @@ public sealed class FdmTextReceiver
         bool useHamming = false, bool recoverErasures = false)
     {
         var sync = synchronizer.FindHeaders(samples, sampleRate, token);
+        return ReceiveSynchronized(samples, sampleRate, sync, token, useHamming, recoverErasures);
+    }
+
+    internal FdmTextReceiveResult ReceiveSynchronized(ReadOnlySpan<float> samples, int sampleRate,
+        FdmSynchronizationResult sync, CancellationToken token, bool useHamming, bool recoverErasures)
+    {
         if (!sync.DataStartSeconds.HasValue)
         {
             var state = sync.IsAmbiguous ? FdmTextReceiveState.AmbiguousSynchronization
@@ -71,7 +78,7 @@ public sealed class FdmTextReceiver
         return ValidateMessage(block.Bits, block, length);
     }
 
-    private FdmTextChannelResult ValidateMessage(string bits, BfskSequenceResult block, int length)
+    internal FdmTextChannelResult ValidateMessage(string bits, BfskSequenceResult block, int length)
     {
         try
         {
@@ -137,6 +144,50 @@ public sealed class FdmTextReceiver
             HammingDiagnostics = decoded,
             HammingCoversCompleteBlock = true
         };
+    }
+
+    // Interpreta decisiones ya recibidas; no vuelve a demodular ni completa símbolos ausentes.
+    internal FdmTextChannelResult InterpretPrefix(BfskSequenceResult block, bool channelA, bool useHamming, bool recoverErasures)
+    {
+        Hamming74DecodeResult? diagnostics = null;
+        FdmTextChannelResult Pending(FdmTextReceiveState state, string reason, int? length = null) =>
+            new(state, true, length, null, null, block, reason) { UsesHamming = useHamming,
+                ErasureRecoveryEnabled = useHamming && recoverErasures, HammingDiagnostics = diagnostics };
+        Hamming74DecodeResult Decode(string bits)
+        {
+            var decoded = new Hamming74Codec().Decode(bits, recoverErasures);
+            return decoded with { Traces = Array.AsReadOnly(decoded.Traces.Select(t => t with { Channel = channelA ? "A" : "B" }).ToArray()) };
+        }
+        int lengthCount = useHamming ? 14 : 8;
+        int completeWords = block.Symbols.Count / 7;
+        if (useHamming && completeWords > 0)
+        {
+            string available = block.Bits[..(completeWords * 7)];
+            if (recoverErasures || !available.Contains('?')) diagnostics = Decode(available);
+        }
+        if (block.Symbols.Count < lengthCount) return Pending(FdmTextReceiveState.Truncated, "Cabecera validada · recibiendo campo de longitud.");
+        string lengthBits = block.Bits[..lengthCount];
+        if (useHamming)
+        {
+            if (!recoverErasures && lengthBits.Contains('?')) return Pending(FdmTextReceiveState.InconclusiveLength, "Longitud protegida no concluyente; recuperación desactivada.");
+            var decodedLength = Decode(lengthBits);
+            diagnostics ??= decodedLength;
+            if (!decodedLength.IsComplete) return Pending(FdmTextReceiveState.InconclusiveLength, "Longitud protegida irrecuperable; no se atribuyen campos posteriores.");
+            lengthBits = decodedLength.DataBits;
+        }
+        if (lengthBits.Contains('?')) return Pending(FdmTextReceiveState.InconclusiveLength, "Campo de longitud no concluyente.");
+        int length = Convert.ToInt32(lengthBits, 2);
+        if (length is < 1 or > FdmTextFrameBuilder.MaximumUtf8Bytes) return Pending(FdmTextReceiveState.InvalidLength, "Longitud fuera de 1–8 bytes.", length);
+        int originalCount = 8 + length * 8 + MessageCodec.CrcBytes * 8;
+        int required = useHamming ? originalCount / 4 * 7 : originalCount;
+        if (block.Symbols.Count < required) return Pending(FdmTextReceiveState.Truncated, $"Longitud disponible · recibiendo bloque: {block.Symbols.Count}/{required} símbolos · CRC no comprobado.", length);
+        if (useHamming && (!recoverErasures && block.Bits.Contains('?') || diagnostics?.IsComplete != true))
+            return Pending(FdmTextReceiveState.InconclusiveBits, "Bloque protegido no reconstruido completamente; CRC no comprobado.", length) with
+            { HammingCoversCompleteBlock = recoverErasures && diagnostics is not null };
+        if (!useHamming && !block.IsComplete) return Pending(FdmTextReceiveState.InconclusiveBits, "Bloque con símbolos no concluyentes; CRC no comprobado.", length);
+        return ValidateMessage(useHamming ? diagnostics!.DataBits : block.Bits, block, length) with
+        { UsesHamming = useHamming, ErasureRecoveryEnabled = useHamming && recoverErasures,
+            HammingDiagnostics = diagnostics, HammingCoversCompleteBlock = useHamming };
     }
 
     private static bool Fits(int count, int rate, double start, int symbols) =>

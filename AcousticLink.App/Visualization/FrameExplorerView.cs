@@ -105,11 +105,11 @@ public sealed class FrameExplorerView : UserControl
         result = null; textResult = null; section = null; scope.Text = message; segments.Children.Clear(); detail.Children.Clear(); groupStrip.Children.Clear(); selections.Clear(); utf8.Clear(message);
         channels.IsEnabled = false; representation.IsEnabled = false;
     }
-    public void Show(FdmTextReceiveResult reception)
+    public void Show(FdmTextReceiveResult reception, bool preserveSelection = false)
     {
         bool changed = !ReferenceEquals(result, reception);
         result = reception;
-        if (changed)
+        if (changed && !preserveSelection)
         {
             selections.Clear(); selectedPart = FramePart.Length;
             var interesting = Channel.HammingDiagnostics?.Traces.FirstOrDefault(t => t.State != Hamming74TraceState.Unchanged);

@@ -8,9 +8,13 @@ public enum MonitorSignalOrigin { Generated, Microphone, ImportedWav }
 // El llamador entrega un buffer finalizado que no volverá a escribir. El monitor solo lo lee.
 public sealed record MonitorSignal(ReadOnlyMemory<float> Samples, int SampleRate, MonitorSignalOrigin Origin, string Description)
 {
+    public object? SourceId { get; init; }
+    public FdmTransmissionInfo? Transmission { get; init; }
+    public ReadOnlyMemory<float> ChannelA { get; init; }
+    public ReadOnlyMemory<float> ChannelB { get; init; }
     public double Duration => Samples.Length / (double)SampleRate;
     public string OriginLabel => Origin switch
-    { MonitorSignalOrigin.Generated => "Señal digital generada · no es recepción acústica", MonitorSignalOrigin.Microphone => "Captura de micrófono finalizada", _ => "WAV importado · muestras originales" };
+    { MonitorSignalOrigin.Generated => "GENERADA · SALIDA DIGITAL · prueba, no recepción acústica", MonitorSignalOrigin.Microphone => "CAPTURADA · ENTRADA ACÚSTICA", _ => "WAV IMPORTADO · ANÁLISIS" };
 }
 
 public sealed record CarrierEnergyWindow(int StartSample, int SampleCount, double A0, double A1, double B0, double B1)
@@ -32,8 +36,15 @@ public sealed class CarrierEnergyMap
     public int WindowSamples { get; }
     public int HopSamples { get; }
     public double Peak { get; }
+    public int OverviewSamplesPerBucket { get; private init; }
+    public CarrierEnergyMap WithSignal(MonitorSignal signal) =>
+        new(signal, Windows.ToArray(), Overview.ToArray(), WindowSamples, HopSamples, Peak) { OverviewSamplesPerBucket = OverviewSamplesPerBucket };
     private CarrierEnergyMap(MonitorSignal signal, CarrierEnergyWindow[] windows, WaveformBucket[] overview, int window, int hop, double peak)
     { Signal = signal; Windows = Array.AsReadOnly(windows); Overview = Array.AsReadOnly(overview); WindowSamples = window; HopSamples = hop; Peak = peak; }
+
+    public static CarrierEnergyMap Live(MonitorSignal signal, WaveformBucket[] overview, double peak,
+        CarrierEnergyWindow[]? windows = null, int window = 0, int hop = 0, int samplesPerBucket = 0) =>
+        new(signal, windows ?? [], overview, window, hop, peak) { OverviewSamplesPerBucket = samplesPerBucket };
 
     public static CarrierEnergyMap Analyze(MonitorSignal signal, CancellationToken token = default)
     {
@@ -75,8 +86,8 @@ public sealed class CarrierEnergyMap
     {
         if (rate <= 0 || sampleCount <= 0 || !double.IsFinite(start) || !double.IsFinite(end) || start < 0 || end <= start || end > sampleCount / (double)rate + 1e-9)
             throw new ArgumentException("Intervalo temporal fuera de la señal.");
-        int first = Math.Clamp((int)Math.Floor(start * rate), 0, sampleCount - 1);
-        int last = Math.Clamp((int)Math.Ceiling(end * rate), first + 1, sampleCount);
+        int first = Math.Clamp((int)Math.Floor(start * rate + 1e-8), 0, sampleCount - 1);
+        int last = Math.Clamp((int)Math.Ceiling(end * rate - 1e-8), first + 1, sampleCount);
         return new(first, last);
     }
     public int WindowAt(double seconds)

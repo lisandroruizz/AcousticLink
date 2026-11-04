@@ -40,6 +40,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         InitializeComponent();
         InitializeWorkspace();
+        InitializeSignalMonitor();
         ReceptionAView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(0); };
         ReceptionBView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(1); };
         FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
@@ -131,7 +132,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             float[] samples = fdmMixer.Generate(bitA, bitB, profile: profile);
-            RememberGeneratedSignal(samples, FdmToneMixer.SampleRate, $"Tonos FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)} · {FdmAmplitudeProfiles.Get(profile).Label}");
+            RememberDetailedSignal(samples, FdmToneMixer.SampleRate, $"Tonos FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)} · {FdmAmplitudeProfiles.Get(profile).Label}", bitA ? "1" : "0", bitB ? "1" : "0", profile, 1);
             await playback.PlayAsync(samples, FdmToneMixer.SampleRate, windowLifetime.Token);
             FdmStatusText.Text = "Reproducción FDM finalizada.";
         }
@@ -171,7 +172,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.Generate(a, b, profile), token);
-            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Secuencias FDM · {FdmAmplitudeProfiles.Get(profile).Label}");
+            RememberDetailedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Secuencias FDM · {FdmAmplitudeProfiles.Get(profile).Label}", a, b, profile);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmSequencesStatusText.Text = "Reproducción de ambas secuencias finalizada.";
         }
@@ -211,7 +212,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateFrames(a, b, profile), token);
-            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Tramas binarias FDM · {FdmAmplitudeProfiles.Get(profile).Label}");
+            RememberDetailedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Tramas binarias FDM · {FdmAmplitudeProfiles.Get(profile).Label}", FdmBitstreamGenerator.BuildFrames(a, b).ChannelA, FdmBitstreamGenerator.BuildFrames(a, b).ChannelB, profile);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
             FdmFramesStatusText.Text = "Reproducción de tramas FDM finalizada.";
         }
@@ -281,8 +282,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             float[] samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, useHamming, profile), token);
-            RememberGeneratedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Mensajes FDM · {FdmAmplitudeProfiles.Get(profile).Label} · Hamming {(useHamming ? "activado" : "desactivado")}");
+            var monitorFrames = new FdmTextFrameBuilder().Build(a, b, useHamming);
+            RememberDetailedSignal(samples, FdmBitstreamGenerator.SampleRate, $"Mensajes FDM · {FdmAmplitudeProfiles.Get(profile).Label} · Hamming {(useHamming ? "activado" : "desactivado")}", monitorFrames.ChannelA.TransmittedBits, monitorFrames.ChannelB.TransmittedBits, profile, frames: monitorFrames);
             await playback.PlayAsync(samples, FdmBitstreamGenerator.SampleRate, token);
+            if (generatedSignal is not null && generatedSignal.Samples.Equals(new ReadOnlyMemory<float>(samples))) { generatedSignal = generatedSignal with { Description = generatedSignal.Description + " · transmisión reproducida (recepción no verificada)" }; if (generatedMap is not null) generatedMap = generatedMap.WithSignal(generatedSignal); }
             FdmTextStatusText.Text = "Reproducción de mensajes finalizada (recepción aún no verificada).";
         }
         catch (OperationCanceledException) when (closing) { }
@@ -358,6 +361,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StartCaptureButton.IsEnabled = false;
         captureBusy = true;
         SaveCaptureButton.IsEnabled = false;
+        bool decodeDuringCapture = DecodeDuringCaptureCheckBox.IsChecked == true;
+        DecodeDuringCaptureCheckBox.IsEnabled = UseHammingReceiveCheckBox.IsEnabled = RecoverReceiveErasuresCheckBox.IsEnabled = false;
         CaptureStatusText.Text = "Inicializando micrófono...";
         try
         {
@@ -368,6 +373,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 audioSelection.SelectMicrophone(started, capture.FormatDescription);
                 InvalidateAudioAnalysis();
                 ExperimentProfileComboBox.SelectedIndex = 0;
+                if (decodeDuringCapture) StartLiveReception(started);
             }
         }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo iniciar el micrófono: {ex.Message}"; }
@@ -387,6 +393,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
     private void InvalidateAudioAnalysis()
     {
+        StopLiveReception();
+        presentedReception = null; presentedReceptionSource = null; presentedReceptionSamples = 0;
+        LiveReceptionInspector.Clear(); ReceiverSignalMonitor.ClearReceptionActivity();
         InvalidateObservedMonitor();
         const string pending = "Audio seleccionado cambiado. Pendiente de analizar esta grabación.";
         AnalysisResultText.Text = pending;
@@ -445,6 +454,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         StopCaptureButton.IsEnabled = capture.IsRecording && !captureBusy;
         CaptureDurationComboBox.IsEnabled = !capture.IsRecording && !captureBusy;
         var recording = audioSelection.Current?.Audio;
+        QueueLiveReception();
+        DecodeDuringCaptureCheckBox.IsEnabled = !capture.IsRecording && !captureBusy;
         CaptureProgressBar.Value = recording is null ? 0 : Math.Min(1, recording.GetMetrics().DurationSeconds / recording.MaximumDurationSeconds);
         if (capture.IsRecording && !captureBusy && ReferenceEquals(recording, capture.Recording) && recording is not null)
             UpdateLiveWaveform(recording);
@@ -465,8 +476,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         DecodeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         SynchronizeFdmButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ReceiveFdmTextButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
-        UseHammingReceiveCheckBox.IsEnabled = !analyzing;
-        RecoverReceiveErasuresCheckBox.IsEnabled = !analyzing && UseHammingReceiveCheckBox.IsChecked == true;
+        UseHammingReceiveCheckBox.IsEnabled = !analyzing && !capture.IsRecording && !captureBusy;
+        RecoverReceiveErasuresCheckBox.IsEnabled = !analyzing && !capture.IsRecording && !captureBusy && UseHammingReceiveCheckBox.IsChecked == true;
         AnalyzeExperimentButton.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && metrics.Count > 0;
         ExportExperimentButton.IsEnabled = lastExperiment is not null && !analyzing && !capture.IsRecording && !captureBusy;
         ExperimentExpectedATextBox.IsEnabled = !analyzing;
@@ -494,6 +505,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 _ => "Micrófono detenido por el dispositivo."
             };
         wasCaptureRecording = capture.IsRecording;
+        RefreshReceptionActivity();
     }
 
     private void WaveformScale_Changed(object sender, SelectionChangedEventArgs e) => UpdateWaveformScale();
@@ -818,13 +830,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private void CancelReceiveFdmText_Click(object sender, RoutedEventArgs e) => textReceiveCancellation?.Cancel();
+    private void CancelReceiveFdmText_Click(object sender, RoutedEventArgs e)
+    {
+        textReceiveCancellation?.Cancel();
+        CancelLiveReception();
+    }
     private void OpenAnalysis_Click(object sender, RoutedEventArgs e) => MainSectionsTabs.SelectedIndex = 3;
 
     private async void ReceiveFdmText_Click(object sender, RoutedEventArgs e)
     {
         var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
+        StopLiveReception();
         analyzing = true;
         RefreshCapture();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
@@ -843,39 +860,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token, useHamming, recoverErasures), cancellation.Token);
             if (closing) return;
-            static string Describe(string name, FdmTextChannelResult channel)
-            {
-                string stats = "";
-                if (channel.UsesHamming)
-                {
-                    var h = channel.HammingDiagnostics;
-                    stats = h is null ? "\nHamming: sin palabras decodificadas." :
-                        $"\nHamming ({(channel.HammingCoversCompleteBlock ? "bloque completo" : "solo longitud")}): {h.WordCount} palabras · " +
-                        $"síndrome cero: {h.ZeroSyndromeWordCount} · no nulo: {h.CorrectedWordCount} · inversiones: {h.AppliedBitFlipCount}\n" +
-                        $"Borrados recuperados: {h.RecoveredErasureCount} · palabras recuperadas por borrados: {h.ErasureRecoveredWordCount} · irrecuperables: {h.UnrecoverableWordCount}\n" +
-                        string.Join("; ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}, síndrome {w.Syndrome}, posición invertida {w.FlippedPosition}"));
-                    stats += $"\nRecuperación de borrados: {(channel.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")}. Los bits conocidos se suponen correctos; la integridad final depende del CRC.";
-                }
-                return $"Modo: {(channel.UsesHamming ? "con Hamming (7,4)" : "sin Hamming")}\n" +
-                $"Canal {name} · cabecera: {(channel.HeaderValid ? "validada" : "no validada")} · bytes: {channel.ByteLength?.ToString() ?? "desconocidos"} · " +
-                $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")}\n" +
-                (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason + stats;
-            }
-            ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
-                result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
-            void ShowChannel(TextBlock target, FdmTextChannelResult channel)
-            {
-                target.Text = $"Sincronización: {result.Synchronization.State} · cabecera {(channel.HeaderValid ? "válida" : "no validada")}\n" +
-                    $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")} · bytes: {channel.ByteLength?.ToString() ?? "?"}\n" +
-                    (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason;
-                target.Foreground = channel.State == FdmTextReceiveState.Valid ? System.Windows.Media.Brushes.LightGreen
-                    : channel.CrcValid is false ? System.Windows.Media.Brushes.Salmon : System.Windows.Media.Brushes.Khaki;
-            }
-            ShowChannel(ReceivedChannelAText, result.ChannelA);
-            ShowChannel(ReceivedChannelBText, result.ChannelB);
-            ReceptionAView.Show(result.ChannelA, result.Synchronization, "A");
-            ReceptionBView.Show(result.ChannelB, result.Synchronization, "B");
-            ReceivedFrameExplorer.Show(result);
+            ShowFdmReception(result, recording);
         }
         catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; }
         catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; }
@@ -892,6 +877,48 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             analyzing = false;
             RefreshCapture();
         }
+    }
+
+    private void ShowFdmReception(FdmTextReceiveResult result, CapturedAudio recording, double? through = null)
+    {
+        static string Describe(string name, FdmTextChannelResult channel)
+        {
+            string stats = "";
+            if (channel.UsesHamming)
+            {
+                var h = channel.HammingDiagnostics;
+                stats = h is null ? "\nHamming: sin palabras decodificadas." :
+                    $"\nHamming ({(channel.HammingCoversCompleteBlock ? "bloque completo" : "longitud / fragmento")}): {h.WordCount} palabras · " +
+                    $"síndrome cero: {h.ZeroSyndromeWordCount} · no nulo: {h.CorrectedWordCount} · inversiones: {h.AppliedBitFlipCount}\n" +
+                    $"Borrados recuperados: {h.RecoveredErasureCount} · palabras recuperadas por borrados: {h.ErasureRecoveredWordCount} · irrecuperables: {h.UnrecoverableWordCount}\n" +
+                    string.Join("; ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}, síndrome {w.Syndrome}, posición invertida {w.FlippedPosition}"));
+                stats += $"\nRecuperación de borrados: {(channel.ErasureRecoveryEnabled ? "habilitada" : "deshabilitada")}. Los bits conocidos se suponen correctos; la integridad final depende del CRC.";
+            }
+            return $"Modo: {(channel.UsesHamming ? "con Hamming (7,4)" : "sin Hamming")}\n" +
+            $"Canal {name} · cabecera: {(channel.HeaderValid ? "validada" : "no validada")} · bytes: {channel.ByteLength?.ToString() ?? "desconocidos"} · " +
+            $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")}\n" +
+            (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason + stats;
+        }
+        ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
+            result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+        void ShowChannel(TextBlock target, FdmTextChannelResult channel)
+        {
+            target.Text = $"Sincronización: {result.Synchronization.State} · cabecera {(channel.HeaderValid ? "válida" : "no validada")}\n" +
+                $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")} · bytes: {channel.ByteLength?.ToString() ?? "?"}\n" +
+                (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason;
+            target.Foreground = channel.State == FdmTextReceiveState.Valid ? System.Windows.Media.Brushes.LightGreen
+                : channel.CrcValid is false ? System.Windows.Media.Brushes.Salmon : System.Windows.Media.Brushes.Khaki;
+        }
+        ShowChannel(ReceivedChannelAText, result.ChannelA);
+        ShowChannel(ReceivedChannelBText, result.ChannelB);
+        ReceptionAView.Show(result.ChannelA, result.Synchronization, "A");
+        ReceptionBView.Show(result.ChannelB, result.Synchronization, "B");
+        ReceivedFrameExplorer.Show(result, through.HasValue);
+        presentedReception = result; presentedReceptionSource = recording;
+        presentedReceptionSamples = through.HasValue ? (int)Math.Round(through.Value * recording.SampleRate) : recording.GetStatus().Count;
+        RefreshReceptionActivity();
+        if (ReferenceEquals(ReceiverSignalMonitor.Data?.Signal.SourceId, recording) && ReceiverSignalMonitor.Data.Signal.Duration >= (through ?? 0)) ReceiverSignalMonitor.SetReception(result, through ?? recording.GetMetrics().DurationSeconds);
+        if (ReferenceEquals(DashboardSignalMonitor.Data?.Signal.SourceId, recording) && DashboardSignalMonitor.Data.Signal.Duration >= (through ?? 0)) DashboardSignalMonitor.SetReception(result, through ?? recording.GetMetrics().DurationSeconds);
     }
 
     private void CancelExperiment_Click(object sender, RoutedEventArgs e) => experimentCancellation?.Cancel();
@@ -1008,6 +1035,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         closing = true;
         IsEnabled = false;
         captureTimer.Stop();
+        monitorTimer.Stop();
+        streamRevision++;
+        StopLiveReception();
 
         // Salir primero del cierre actual de WPF, incluso si la limpieza termina sincrónicamente.
         Dispatcher.BeginInvoke(new Action(() => _ = CompleteCloseAsync()));
@@ -1027,6 +1057,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
 
             // DisposeAsync espera la sesión y la liberación del recorder de NAudio.
+            await endingLiveReception;
             await capture.DisposeAsync();
             if (capture.Error is not null)
                 System.Diagnostics.Trace.TraceError($"Error de captura durante el cierre: {capture.Error}");

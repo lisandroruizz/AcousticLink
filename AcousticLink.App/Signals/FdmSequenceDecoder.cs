@@ -52,8 +52,17 @@ public sealed class FdmSequenceDecoder
         return DecodeCore(samples, sampleRate, startSeconds, symbolCount, cancellationToken);
     }
 
+    // Una decisión nueva con el mismo origen absoluto y las mismas ventanas que el bloque manual.
+    public FdmSequenceResult DecodeMessageSymbol(ReadOnlySpan<float> samples, int sampleRate,
+        double blockStartSeconds, int index, CancellationToken token = default)
+    {
+        int maximum = Protocol.FdmTextFrameBuilder.MaximumProtectedFrameBits - FdmBitstreamGenerator.HeaderBits;
+        if (index < 0 || index >= maximum) throw new ArgumentOutOfRangeException(nameof(index));
+        return DecodeCore(samples, sampleRate, blockStartSeconds, 1, token, index);
+    }
+
     private FdmSequenceResult DecodeCore(ReadOnlySpan<float> samples, int sampleRate,
-        double startSeconds, int symbolCount, CancellationToken cancellationToken = default)
+        double startSeconds, int symbolCount, CancellationToken cancellationToken = default, int firstSymbol = 0)
     {
         if (sampleRate <= 2 * FdmToneMixer.ChannelBBit1Frequency)
             throw new ArgumentOutOfRangeException(nameof(sampleRate));
@@ -61,12 +70,12 @@ public sealed class FdmSequenceDecoder
             throw new ArgumentOutOfRangeException(nameof(startSeconds), "El inicio debe ser finito y no negativo.");
         double origin = startSeconds * sampleRate;
         double step = SymbolDurationSeconds * sampleRate;
-        if (!double.IsFinite(origin) || Math.Round(origin + symbolCount * step) > samples.Length)
+        if (!double.IsFinite(origin) || Math.Round(origin + (firstSymbol + symbolCount) * step) > samples.Length)
             throw new ArgumentException("Ambas secuencias completas deben estar dentro de la grabación.");
 
         var a = new List<BfskSymbolResult>(symbolCount);
         var b = new List<BfskSymbolResult>(symbolCount);
-        for (int i = 0; i < symbolCount; i++)
+        for (int i = firstSymbol; i < firstSymbol + symbolCount; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Cada límite parte del origen absoluto, sin sumar pasos ya redondeados.
