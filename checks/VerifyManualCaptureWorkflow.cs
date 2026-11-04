@@ -65,6 +65,10 @@ var thread = new Thread(() =>
         monitor.StartInspection(); Pump(Task.Delay(120)); Require(monitor.InspectionRunning && !monitor.IsLive && monitor.CursorSeconds > 0, "Recorrer WAV permanece disponible sin captura"); monitor.StopInspection();
         Call("ReceiveFdmText_Click", window, new RoutedEventArgs()); Wait(() => !(bool)Field("analyzing"));
         monitor.SetCursor(3.25); Require(lab.Selection is not null && lab.WindowObservation?.AnalysisSampleCount == 2880, "Símbolo y ventana central coherentes después de análisis manual");
+        typeof(AudioCaptureService).GetField("session", flags)!.SetValue(capture, Task.FromException(new InvalidOperationException("fallo de parada inyectado")));
+        Pump((Task)Call("StopCaptureSafelyAsync")!);
+        Require(!(bool)Field("captureBusy") && ((Button)window.FindName("StartCaptureButton")).IsEnabled && ((TextBlock)window.FindName("CaptureStatusText")).Text.Contains("fallo de parada inyectado"), "Error de parada se informa y finally restaura controles");
+        typeof(AudioCaptureService).GetField("session", flags)!.SetValue(capture, Task.CompletedTask);
         window.Close(); Wait(() => !window.IsVisible); app.Shutdown();
     }
     catch (Exception ex) { failure = ex; }

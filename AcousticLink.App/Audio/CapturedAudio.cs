@@ -79,6 +79,9 @@ public sealed class CapturedAudio
         lock (sync)
         {
             if (stopReason != CaptureStopReason.None) return;
+            // Validar el paquete completo antes de publicar muestras o alterar RMS/pico.
+            foreach (float value in interleaved.AsSpan(0, length))
+                if (!float.IsFinite(value)) throw new ArgumentException("El audio recibido contiene muestras no finitas.", nameof(interleaved));
             for (int i = 0; i < length && count < samples.Length; i += InputChannels)
             {
                 double sum = 0;

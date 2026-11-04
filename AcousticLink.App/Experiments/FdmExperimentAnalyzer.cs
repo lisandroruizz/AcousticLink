@@ -62,7 +62,7 @@ public sealed class FdmExperimentAnalyzer
                 token.ThrowIfCancellationRequested();
                 if (Math.Round(origin + (i + 1) * step) > samples.Length) break;
                 // Límites calculados desde un único origen absoluto, sin acumular pasos redondeados.
-                var symbol = decoder.Decode(samples, sampleRate, sync.DataStartSeconds.Value + i * FdmSequenceDecoder.SymbolDurationSeconds, 1);
+                var symbol = decoder.DecodeMessageSymbol(samples, sampleRate, sync.DataStartSeconds.Value, i, token);
                 if (i < references.ChannelA.EncodedBlockBitCount) rawA.Append(symbol.ChannelA.Bits);
                 if (i < references.ChannelB.EncodedBlockBitCount) rawB.Append(symbol.ChannelB.Bits);
             }

@@ -368,6 +368,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             int seconds = int.Parse((string)((ComboBoxItem)CaptureDurationComboBox.SelectedItem).Tag);
             await capture.StartAsync(seconds);
+            if (closing) return; // No publicar una sesión nueva si el cierre comenzó durante la inicialización.
             if (capture.Recording is { } started)
             {
                 audioSelection.SelectMicrophone(started, capture.FormatDescription);
@@ -377,17 +378,23 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
         catch (Exception ex) { CaptureStatusText.Text = $"No se pudo iniciar el micrófono: {ex.Message}"; }
-        captureBusy = false;
-        RefreshCapture();
+        finally { captureBusy = false; if (!closing) RefreshCapture(); }
     }
 
-    private async void StopCapture_Click(object sender, RoutedEventArgs e)
+    private async void StopCapture_Click(object sender, RoutedEventArgs e) => await StopCaptureSafelyAsync();
+
+    private async Task StopCaptureSafelyAsync()
     {
         StopCaptureButton.IsEnabled = false;
         captureBusy = true;
-        await capture.StopAsync();
-        captureBusy = false;
-        RefreshCapture();
+        try { await capture.StopAsync(); }
+        catch (OperationCanceledException) { if (!closing) CaptureStatusText.Text = "Parada cancelada."; }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceError($"Error al detener captura: {ex}");
+            if (!closing) CaptureStatusText.Text = $"No se pudo detener el micrófono: {ex.Message}";
+        }
+        finally { captureBusy = false; if (!closing) RefreshCapture(); }
     }
 
     // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
