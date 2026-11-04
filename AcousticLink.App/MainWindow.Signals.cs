@@ -159,6 +159,7 @@ public partial class MainWindow
     }
     private void RefreshObservedMonitor()
     {
+        if (continuousListening is not null || continuousHistorySelected || continuousSegmentRetained) return;
         var selection = audioSelection.Current;
                 if (closing || capture.IsRecording || captureBusy || selection is null || ReferenceEquals(monitorAudio, selection.Audio)) return;
         if (selection.Audio.GetMetrics() is not { Count: > 0, StopReason: not CaptureStopReason.None }) return;

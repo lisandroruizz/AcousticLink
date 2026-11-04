@@ -63,7 +63,9 @@ var thread = new Thread(() =>
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
-        var window = new MainWindow { ShowInTaskbar = false, Left = -10000, Width = 1366, Height = 768 }; window.Show();
+        var window = new MainWindow { ShowInTaskbar = false, Left = -10000, Width = 1366, Height = 768 }; // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
+        ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
+        window.Show();
         T Find<T>(string name) => (T)window.FindName(name);
         void Invoke(string method, params object[] values) => typeof(MainWindow).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, values);
         var view = Find<SignalMonitorView>("DashboardSignalMonitor");

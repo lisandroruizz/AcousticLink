@@ -20,7 +20,9 @@ var thread = new Thread(() =>
     try
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
-        var window = new MainWindow { Width = 1366, Height = 768, ShowInTaskbar = false, Left = -10000 }; window.Show();
+        var window = new MainWindow { Width = 1366, Height = 768, ShowInTaskbar = false, Left = -10000 }; // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
+        ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
+        window.Show();
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
         object Field(string name) => typeof(MainWindow).GetField(name, flags)!.GetValue(window)!;

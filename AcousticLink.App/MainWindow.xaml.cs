@@ -41,6 +41,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         InitializeComponent();
         InitializeWorkspace();
         InitializeSignalMonitor();
+        InitializeContinuousListening();
         ReceptionAView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(0); };
         ReceptionBView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(1); };
         FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
@@ -358,6 +359,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async void StartCapture_Click(object sender, RoutedEventArgs e)
     {
+        if (continuousListening is not null) { CaptureStatusText.Text = "Detené la escucha continua antes de iniciar una captura manual."; return; }
         StartCaptureButton.IsEnabled = false;
         captureBusy = true;
         SaveCaptureButton.IsEnabled = false;
@@ -400,6 +402,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
     private void InvalidateAudioAnalysis()
     {
+        continuousSegmentRetained = false;
+        continuousHistorySelected = false;
+        ContinuousHistoryComboBox.SelectedIndex = -1;
         StopLiveReception();
         presentedReception = null; presentedReceptionSource = null; presentedReceptionSamples = 0;
         LiveReceptionInspector.Clear(); ReceiverSignalMonitor.ClearReceptionActivity();
@@ -472,7 +477,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         AnalysisConfigurationWarning.Text = differentModes
             ? "ADVERTENCIA: Receptor y mediciones tienen modalidades distintas. No se cambian automáticamente."
             : "Receptor y mediciones: modalidades coincidentes, opciones independientes.";
-        if (!capture.IsRecording && !captureBusy && recording is not null && !ReferenceEquals(waveformAudio, recording))
+        if (!continuousSegmentRetained && !continuousHistorySelected && continuousListening is null && !capture.IsRecording && !captureBusy && recording is not null && !ReferenceEquals(waveformAudio, recording))
             _ = UpdateWaveformAsync(recording);
         var metrics = recording?.GetStatus() ?? (Count: 0, Peak: 0f);
         SaveCaptureButton.IsEnabled = !capture.IsRecording && !captureBusy && metrics.Count > 0;
@@ -512,7 +517,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 _ => "Micrófono detenido por el dispositivo."
             };
         wasCaptureRecording = capture.IsRecording;
-        RefreshReceptionActivity();
+        if (continuousListening is null && !continuousHistorySelected && !continuousSegmentRetained) RefreshReceptionActivity();
+        else if (continuousListening is not null) RefreshContinuousControls();
+        if (continuousHistorySelected)
+        {
+            DisableManualAudioTools();
+            if (continuousListening is null)
+            {
+                WorkspaceAudioStatusText.Text = "Histórico de escucha continua · sin micrófono activo";
+                LiveCaptureText.Text = "Inspección histórica · no captura nueva";
+            }
+        }
+        RefreshContinuousRetainedContext();
     }
 
     private void WaveformScale_Changed(object sender, SelectionChangedEventArgs e) => UpdateWaveformScale();
@@ -1064,6 +1080,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             }
 
             // DisposeAsync espera la sesión y la liberación del recorder de NAudio.
+            await StopContinuousListeningAsync();
             await endingLiveReception;
             await capture.DisposeAsync();
             if (capture.Error is not null)

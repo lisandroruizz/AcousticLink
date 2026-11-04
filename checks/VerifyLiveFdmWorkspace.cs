@@ -20,7 +20,9 @@ var thread = new Thread(() =>
     try
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
-        var window = new MainWindow { Width = 1366, Height = 768, ShowInTaskbar = false, Left = -10000, Top = -10000 }; window.Show();
+        var window = new MainWindow { Width = 1366, Height = 768, ShowInTaskbar = false, Left = -10000, Top = -10000 }; // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
+        ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
+        window.Show();
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
         object? Field(string name) => typeof(MainWindow).GetField(name, flags)!.GetValue(window);
@@ -53,7 +55,7 @@ var thread = new Thread(() =>
         audio.Append(samples[..(48000 * 5)], 48000 * 5); Process(false);
         var a = (ReceptionView)window.FindName("ReceptionAView");
         Require(a.Result is { HeaderValid: true, IsReceiving: true, ByteLength: 4, CrcValid: null }, "La UI publica longitud y datos parciales reales");
-        Require(((SignalMonitorView)window.FindName("ReceiverSignalMonitor")).Data is null, "El worker de recepción no depende del gráfico ni de copiar su audio");
+        Require(((SignalMonitorView)window.FindName("ReceiverSignalMonitor")).Data is null, "El worker de recepción no depende del gráfico ni de copiar su audio: " + ((SignalMonitorView)window.FindName("ReceiverSignalMonitor")).Data?.Signal.Description);
         Call("RefreshCapture");
         var inspector = (ReceptionProgressView)window.FindName("LiveReceptionInspector");
         var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");

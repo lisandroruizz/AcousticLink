@@ -19,6 +19,8 @@ var thread = new Thread(() =>
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
         var window = new MainWindow { ShowInTaskbar = false, Left = -10000, Top = -10000 };
+        // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
+        ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
         window.Show();
         Pump();
         var root = (Grid)window.Content;

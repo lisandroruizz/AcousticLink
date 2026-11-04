@@ -15,7 +15,7 @@ public sealed class IncrementalFdmTextReceiver
 {
     private readonly float[] samples;
     private readonly int rate;
-    private readonly bool hamming, erasures;
+    private readonly bool hamming, erasures, lockFirstHeader;
     private readonly FdmFrameSynchronizer.HeaderSearch search;
     private readonly FdmSequenceDecoder decoder = new();
     private readonly FdmTextReceiver receiver = new();
@@ -31,11 +31,11 @@ public sealed class IncrementalFdmTextReceiver
     public LiveFdmReception? Current { get; private set; }
 
     public IncrementalFdmTextReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false,
-        int maximumSeconds = 30)
+        int maximumSeconds = 30, bool lockFirstHeader = false)
     {
         if (maximumSeconds is < 1 or > 30) throw new ArgumentOutOfRangeException(nameof(maximumSeconds));
         search = new FdmFrameSynchronizer().CreateHeaderSearch(sampleRate);
-        rate = sampleRate; hamming = useHamming; erasures = useHamming && recoverErasures;
+        this.lockFirstHeader = lockFirstHeader; rate = sampleRate; hamming = useHamming; erasures = useHamming && recoverErasures;
         samples = new float[checked(rate * maximumSeconds)];
     }
 
@@ -69,7 +69,7 @@ public sealed class IncrementalFdmTextReceiver
     private LiveFdmReception Advance(bool final, CancellationToken token)
     {
         var prefix = samples.AsSpan(0, Count);
-        var sync = search.Advance(prefix, final, token);
+        var sync = lockFirstHeader && synchronization?.DataStartSeconds is not null ? synchronization : search.Advance(prefix, final, token);
         if (synchronization?.StartSeconds != sync.StartSeconds || synchronization?.ChannelA?.HeaderValid != sync.ChannelA?.HeaderValid
             || synchronization?.ChannelB?.HeaderValid != sync.ChannelB?.HeaderValid)
         {

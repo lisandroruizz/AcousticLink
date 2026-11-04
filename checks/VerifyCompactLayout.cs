@@ -20,6 +20,8 @@ var thread = new Thread(() =>
     {
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
         var window = new MainWindow { Width = 1366, Height = 768, Left = -10000, Top = -10000, ShowInTaskbar = false };
+        // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
+        ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
         window.Show();
         var tabs = (TabControl)window.FindName("MainSectionsTabs");
         tabs.SelectedIndex = 3;
