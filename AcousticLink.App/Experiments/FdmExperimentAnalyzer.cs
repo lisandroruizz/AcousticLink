@@ -73,7 +73,7 @@ public sealed class FdmExperimentAnalyzer
         { DeclaredAmplitudeProfile = declaredAmplitudeProfile, ErasureRecoveryEnabled = recoverErasures };
     }
 
-    private static FdmChannelExperiment Evaluate(string name, string message, FdmTextChannelFrame reference,
+    internal static FdmChannelExperiment Evaluate(string name, string message, FdmTextChannelFrame reference,
         string raw, FdmTextChannelResult reception, bool useHamming, CancellationToken token, bool recoverErasures)
     {
         if (!reception.HeaderValid)

@@ -42,6 +42,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         InitializeWorkspace();
         InitializeSignalMonitor();
         InitializeContinuousListening();
+        InitializeComparison();
         ReceptionAView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(0); };
         ReceptionBView.TextRequested += () => { ReceiverTools.SelectedIndex = 1; ReceivedFrameExplorer.OpenText(1); };
         FdmProfileComboBox.ItemsSource = FdmAmplitudeProfiles.All;
