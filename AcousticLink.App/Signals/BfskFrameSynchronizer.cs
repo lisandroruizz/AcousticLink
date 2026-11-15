@@ -1,7 +1,10 @@
 namespace AcousticLink.App.Signals;
 
 public sealed record BfskSynchronizationResult(bool Found, double? StartSeconds, string Preamble,
-    string Marker, double? DataStartSeconds, BfskSequenceResult? Data, string Reason);
+    string Marker, double? DataStartSeconds, BfskSequenceResult? Data, string Reason)
+{
+    public BfskSequenceResult? Header { get; init; }
+}
 
 public sealed class BfskFrameSynchronizer
 {
@@ -73,6 +76,75 @@ public sealed class BfskFrameSynchronizer
             recovered.Bits[BfskFrameBuilder.Preamble.Length..], dataStart, data,
             data.IsComplete ? "Cabecera validada; datos concluyentes, sin verificación de integridad."
                 : "Cabecera validada; datos incompletos: se conservan los símbolos '?'.");
+    }
+
+    public BfskSynchronizationResult FindHeaders(ReadOnlySpan<float> samples, int sampleRate,
+        CancellationToken token = default) => CreateHeaderSearch(sampleRate).Advance(samples, true, token);
+
+    public HeaderSearch CreateHeaderSearch(int sampleRate) => new(this, sampleRate);
+
+    // Busca solamente inicios nuevos cuando crece el prefijo de una sesión.
+    public sealed class HeaderSearch
+    {
+        private readonly BfskFrameSynchronizer owner;
+        private readonly int rate, coarse, fine, headerSamples;
+        private readonly List<(int Position, double Score)> groups = [];
+        private int next, lastMatch = -1, previousCount;
+        private (int Position, double Score)? refinedFrom;
+        private BfskSynchronizationResult? cached;
+        public int EvaluatedStarts { get; private set; }
+
+        internal HeaderSearch(BfskFrameSynchronizer owner, int sampleRate)
+        {
+            if (sampleRate <= 2 * BfskToneGenerator.Bit1Frequency) throw new ArgumentOutOfRangeException(nameof(sampleRate));
+            this.owner = owner; rate = sampleRate;
+            coarse = Math.Max(1, (int)Math.Round(CoarseStepSeconds * rate));
+            fine = Math.Max(1, (int)Math.Round(FineStepSeconds * rate));
+            headerSamples = (int)Math.Round((BfskFrameBuilder.Preamble.Length + BfskFrameBuilder.StartMarker.Length)
+                * BfskSequenceDecoder.BitDurationSeconds * rate);
+        }
+
+        public BfskSynchronizationResult Advance(ReadOnlySpan<float> samples, bool final = false, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (samples.Length < previousCount) throw new ArgumentException("El prefijo no puede retroceder.");
+            previousCount = samples.Length;
+            int last = samples.Length - headerSamples;
+            string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
+            void Add(int position, double score)
+            {
+                EvaluatedStarts++;
+                if (score < 0) return;
+                if (lastMatch < 0 || position - lastMatch > BfskSequenceDecoder.BitDurationSeconds * rate)
+                    groups.Add((position, score));
+                else if (score > groups[^1].Score) groups[^1] = (position, score);
+                lastMatch = position;
+            }
+            while (next <= last) { token.ThrowIfCancellationRequested(); Add(next, owner.HeaderScore(samples, rate, next, header)); next += coarse; }
+            if (final && last >= 0 && last % coarse != 0)
+            { token.ThrowIfCancellationRequested(); Add(last, owner.HeaderScore(samples, rate, last, header)); }
+            if (groups.Count == 0) return Failure("Buscando cabecera BFSK válida y completa.");
+            if (groups.Count > 1) return Failure("Sincronización ambigua: varias cabeceras BFSK separadas.");
+            if (!final && last < lastMatch + (int)Math.Ceiling(.1 * rate) + coarse)
+                return Failure("Candidata de cabecera todavía en evaluación temporal.");
+            var best = groups[0];
+            if (!final && best == refinedFrom && cached is not null) return cached;
+            refinedFrom = best;
+            int begin = Math.Max(0, best.Position - coarse), end = Math.Min(last, best.Position + coarse);
+            for (int position = begin; ; position = Math.Min(end, position + fine))
+            {
+                token.ThrowIfCancellationRequested();
+                double score = owner.HeaderScore(samples, rate, position, header); EvaluatedStarts++;
+                if (score > best.Score) best = (position, score);
+                if (position == end) break;
+            }
+            double start = best.Position / (double)rate;
+            var recovered = owner.decoder.DecodeMessageBlock(samples, rate, start, header.Length, token);
+            return cached = new(true, start, recovered.Bits[..BfskFrameBuilder.Preamble.Length],
+                recovered.Bits[BfskFrameBuilder.Preamble.Length..],
+                start + header.Length * BfskSequenceDecoder.BitDurationSeconds, null,
+                "Cabecera BFSK validada; datos y CRC todavía no comprobados.") { Header = recovered };
+        }
     }
 
     private double HeaderScore(ReadOnlySpan<float> samples, int rate, int position, string header)

@@ -6,6 +6,8 @@ namespace AcousticLink.App.Visualization;
 
 public sealed class ReceivedSymbolsView : FrameworkElement
 {
+    private bool singleChannel;
+    public bool SingleChannel { get => singleChannel; set { singleChannel = value; Height = value ? 30 : 58; InvalidateVisual(); } }
     private IReadOnlyList<ReceivedSymbolTrace> a = [], b = [];
     private int rate;
     private double start, end, cursor;
@@ -17,7 +19,7 @@ public sealed class ReceivedSymbolsView : FrameworkElement
         {
             if (rate <= 0 || end <= start) return;
             double time = start + Math.Clamp((e.GetPosition(this).X - 88) / Math.Max(1, ActualWidth - 102), 0, 1) * (end - start);
-            var selected = ReceivedSymbols.At(e.GetPosition(this).Y < 28 ? a : b, time, rate);
+            var selected = ReceivedSymbols.At(SingleChannel || e.GetPosition(this).Y < 28 ? a : b, time, rate);
             if (selected is not null) Selected?.Invoke(selected);
         };
     }
@@ -30,7 +32,7 @@ public sealed class ReceivedSymbolsView : FrameworkElement
             { MaxTextWidth = Math.Max(1, ActualWidth - x - 4) }, new(x, y));
         double width = Math.Max(1, ActualWidth - 102);
         double X(double t) => 88 + (t - start) / (end - start) * width;
-        for (int row = 0; row < 2; row++)
+        for (int row = 0; row < (SingleChannel ? 1 : 2); row++)
         {
             var symbols = row == 0 ? a : b; double y = row * 28;
             Brush color = row == 0 ? Brushes.LightSkyBlue : Brushes.SandyBrown;

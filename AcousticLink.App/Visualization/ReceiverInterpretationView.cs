@@ -10,6 +10,17 @@ namespace AcousticLink.App.Visualization;
 public sealed class ReceiverInterpretationView : UserControl
 {
     private readonly ComboBox channel = new() { ItemsSource = new[] { "Canal A · 1200 / 1900 Hz", "Canal B · 3000 / 3700 Hz" }, SelectedIndex = 0 };
+    public bool SingleChannel
+    {
+        get => channel.Visibility == Visibility.Collapsed;
+        set
+        {
+            channel.ItemsSource = value ? new[] { "BFSK · 1200 / 1900 Hz" }
+                : new[] { "Canal A · 1200 / 1900 Hz", "Canal B · 3000 / 3700 Hz" };
+            channel.SelectedIndex = 0;
+            channel.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
     private readonly ComboBox symbols = new() { DisplayMemberPath = "Number" }, words = new() { DisplayMemberPath = "Label" };
     private readonly TextBlock context = Text("Sin audio"), window = Text(""), sync = Text(""), scope = Text("");
     private readonly DetectionWindowView waveform = new();

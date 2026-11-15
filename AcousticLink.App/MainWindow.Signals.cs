@@ -120,6 +120,15 @@ public partial class MainWindow
         preparingPreview = true;
         try
         {
+            if (IsBfskTransmit)
+            {
+                var samplesBfsk = await Task.Run(() => new BfskTextModem().Generate(a, hamming), windowLifetime.Token);
+                if (closing) return;
+                RememberBfskSignal(samplesBfsk, $"Señal BFSK digital preparada · sin reproducción · Hamming {hamming}",
+                    new BfskTextModem().Build(a, hamming).FrameBits);
+                TransmitterTools.SelectedIndex = 2; FdmTextStatusText.Text = "Vista previa BFSK preparada sin reproducir sonido.";
+                return;
+            }
             var frames = new FdmTextFrameBuilder().Build(a, b, hamming);
             var samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, hamming, profile), windowLifetime.Token);
             if (closing) return;
@@ -133,7 +142,7 @@ public partial class MainWindow
     private MonitorSignal? observedSignal, generatedSignal;
     private CarrierEnergyMap? observedMap, generatedMap;
     private CancellationTokenSource? observedMonitorCancellation, generatedMonitorCancellation;
-    private string observedMonitorStatus = "Sin audio finalizado. Capture o importe un WAV.", generatedMonitorStatus = "Sin buffer generado. Prepare una emisión FDM para observarla.";
+    private string observedMonitorStatus = "Sin audio finalizado. Capture o importe un WAV.", generatedMonitorStatus = "Sin buffer generado. Prepare una emisión para observarla.";
 
     private void OpenSignalMonitor_Click(object sender, RoutedEventArgs e) => DashboardTools.SelectedIndex = 1;
     private void OpenGeneratedMonitor_Click(object sender, RoutedEventArgs e) => TransmitterTools.SelectedIndex = 2;
@@ -141,6 +150,7 @@ public partial class MainWindow
     private void ShowMonitorSource()
     {
         bool generated = MonitorSourceComboBox.SelectedIndex == 1;
+        DashboardSignalMonitor.SingleChannel = generated ? generatedSignal?.BfskFrameBits is not null : IsBfskReceive;
         if (streamActive && streamingMap is not null && (streamingMap.Signal.Origin == MonitorSignalOrigin.Generated) == generated)
         { if (!ReferenceEquals(DashboardSignalMonitor.Data, streamingMap)) DashboardSignalMonitor.UpdateLive(streamingMap); return; }
         if (generated && IsGeneratedPlaying || !generated && capture.IsRecording) return;
@@ -187,6 +197,7 @@ public partial class MainWindow
     private async void RememberDetailedSignal(float[] samples, int sampleRate, string description, string? bitsA = null, string? bitsB = null, FdmAmplitudeProfile profile = FdmAmplitudeProfile.Original, double symbolSeconds = .1, FdmTextFrames? frames = null)
     {
         if (closing) return;
+        GeneratedSignalMonitor.SingleChannel = false;
         // Es el mismo arreglo entregado a reproducción. Ni playback ni el monitor lo modifican.
         generatedSignal = new(samples, sampleRate, MonitorSignalOrigin.Generated, description)
         { SourceId = samples, Transmission = bitsA is not null && bitsB is not null ? new(bitsA, bitsB, symbolSeconds, frames) : null };

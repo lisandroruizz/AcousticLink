@@ -11,7 +11,14 @@ public sealed class ReceptionProgressView : UserControl
     private readonly System.Windows.Controls.Primitives.UniformGrid channels = new();
     private readonly ChannelPanel a = new("A", Brushes.LightSkyBlue), b = new("B", Brushes.SandyBrown);
     public ReceptionActivity? Activity { get; private set; }
-    public bool Compact { get => channels.Columns == 2; set => channels.Columns = value ? 2 : 1; }
+    private bool compact, singleChannel;
+    public bool Compact { get => compact; set { compact = value; channels.Columns = value && !singleChannel ? 2 : 1; } }
+    public bool SingleChannel
+    {
+        get => singleChannel;
+        set { singleChannel = value; b.Panel.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+            channels.Columns = compact && !value ? 2 : 1; }
+    }
     public ReceptionProgressView()
     {
         var panel = new StackPanel { Margin = new Thickness(2, 4, 2, 4) };

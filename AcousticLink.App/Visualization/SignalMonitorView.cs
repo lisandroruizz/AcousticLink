@@ -10,7 +10,26 @@ namespace AcousticLink.App.Visualization;
 // Observación de muestras reales. La energía se calcula después de finalizar; no decide bits.
 public sealed class SignalMonitorView : UserControl
 {
-    private readonly TextBlock source = Label("Sin señal disponible · capture, importe un WAV o prepare una emisión FDM.");
+    private readonly TextBlock source = Label("Sin señal disponible · capture, importe un WAV o prepare una emisión.");
+    private bool singleChannel;
+    public bool SingleChannel
+    {
+        get => singleChannel;
+        set
+        {
+            singleChannel = value;
+            for (int i = 2; i < energyValues.Children.Count; i++) energyValues.Children[i].Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+            energyValues.Columns = value ? 2 : 4;
+            ((TabItem)signalTools.Items[1]).Visibility = value || ReceiverMode ? Visibility.Collapsed : Visibility.Visible;
+            contribution.Visibility = value || ReceiverMode ? Visibility.Collapsed : Visibility.Visible;
+            receptionProgress.SingleChannel = value;
+            interpretation.SingleChannel = value;
+            receptionStrip.SingleChannel = value;
+            symbolStrip.SingleChannel = value;
+            carriers.ClearCache(); carriers.InvalidateVisual();
+            if (map is not null) SetCursor(cursor);
+        }
+    }
     private readonly TextBlock inspectionContext = Label("Inspección posterior");
     private readonly Button labReplay = new() { Content = "Recorrer WAV", Padding = new Thickness(8, 3, 8, 3), FontSize = 12 };
     private readonly Button labFollow = new() { Content = "Pausar seguimiento / volver al vivo", Padding = new Thickness(8, 3, 8, 3), FontSize = 12 };
@@ -59,7 +78,7 @@ public sealed class SignalMonitorView : UserControl
         if (result is not null && interpretation.Reception is not null && through < interpretation.ReceptionThrough) return;
         receptionStrip.Reception = result; receptionStrip.InvalidateVisual(); interpretation.SetReception(result, through);
         receivedA = ReceivedSymbols.From(result, false, map?.Signal.SampleRate ?? 48000);
-        receivedB = ReceivedSymbols.From(result, true, map?.Signal.SampleRate ?? 48000);
+        receivedB = SingleChannel ? [] : ReceivedSymbols.From(result, true, map?.Signal.SampleRate ?? 48000);
         if (map is not null) SetCursor(cursor); else RefreshSelection();
     }
     public void StartInspection()
@@ -279,8 +298,14 @@ public sealed class SignalMonitorView : UserControl
         if (map.Windows.Count == 0) { cursorInfo.Text = $"Cursor {cursor:0.000000} s · grabando"; RefreshSelection(); return; }
         var frame = map.Windows[map.WindowAt(cursor)];
         for (int i = 0; i < 4; i++) ((TextBlock)energyValues.Children[i]).Text = $"{new[] { "A0", "A1", "B0", "B1" }[i]} · {CarrierEnergyMap.Frequencies[i]:0} Hz\n{frame.Energy(i):G4} · {CarrierEnergyMap.Decibels(frame.Energy(i)):0.0} dB";
-        energies.Text = string.Join(" · ", Enumerable.Range(0, 4).Select(i => $"{CarrierEnergyMap.Frequencies[i]:0} Hz: {frame.Energy(i):G4} ({CarrierEnergyMap.Decibels(frame.Energy(i)):0.0} dB)"));
+        energies.Text = string.Join(" · ", Enumerable.Range(0, SingleChannel ? 2 : 4).Select(i => $"{CarrierEnergyMap.Frequencies[i]:0} Hz: {frame.Energy(i):G4} ({CarrierEnergyMap.Decibels(frame.Energy(i)):0.0} dB)"));
         cursorInfo.Text = $"Cursor {cursor:0.000000} s · selección {selectedStart:0.000000}–{selectedEnd:0.000000} s · energía de ventana [{frame.StartSample / (double)map.Signal.SampleRate:0.000}, {(frame.StartSample + frame.SampleCount) / (double)map.Signal.SampleRate:0.000}] s.";
+        if (map.Signal.BfskFrameBits is { } bits && bits.Length > 0)
+        {
+            int symbol = Math.Clamp((int)(cursor / AcousticLink.App.Signals.BfskSequenceDecoder.BitDurationSeconds), 0, bits.Length - 1);
+            cursorInfo.Text += $" · Símbolo BFSK generado #{symbol + 1}/{bits.Length}: {bits[symbol]} · " +
+                (bits[symbol] == '0' ? "1200 Hz" : "1900 Hz");
+        }
         RefreshSelection();
     }
     private void RefreshSelection() { labReplay.IsEnabled = !live && map is not null; inspectionContext.Text = live ? FollowingCapture ? "Captura activa · seguimiento visual" : "Captura activa · inspección histórica (recepción continúa)" : InspectionRunning ? "Recorrer WAV · sin reproducción ni recepción nueva" : "Inspección posterior"; UpdateSymbolSelection(); bool follow = live && FollowingCapture; bool changedFollow = interpretation.FollowLatest != follow; interpretation.FollowLatest = follow; interpretation.Update(map, cursor, changedFollow); receptionStrip.Update(map, cursor); waveform.InvalidateVisual(); carriers.InvalidateVisual(); if (signalTools.SelectedIndex == 1) formation.Update(map, start, end, cursor); }
@@ -293,7 +318,7 @@ public sealed class SignalMonitorView : UserControl
         var a = ReceivedSymbols.At(receivedA, cursor, rate); var b = ReceivedSymbols.At(receivedB, cursor, rate);
         if (a is null && b is null) { if (receiverMode) decisions.Text = "Sin símbolo sincronizado en este instante · energía ≠ decisión de símbolo"; return; }
         string Describe(ReceivedSymbolTrace? symbol) => symbol is null ? "No disponible" : $"#{symbol.Number}: {symbol.Value} · {symbol.Section} · {(symbol.Frequency is double f ? f.ToString("0") + " Hz" : "inconcluso")}";
-        decisions.Text = $"A {Describe(a)}   |   B {Describe(b)}";
+        decisions.Text = SingleChannel ? $"BFSK {Describe(a)}" : $"A {Describe(a)}   |   B {Describe(b)}";
         cursorInfo.Text = $"Cursor {cursor:0.000000} s · mapa: ventanas de 20 ms · tarjetas: decisiones reales del símbolo (soporte exacto en ayuda)";
         foreach (var pair in new[] { (a, 0), (b, 2) })
         {
@@ -379,9 +404,9 @@ public sealed class SignalMonitorView : UserControl
             void Label(string value, double x, double y, Brush? brush = null) => dc.DrawText(new FormattedText(value,
                 CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 12, brush ?? Brushes.LightGray,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip), new Point(x, y));
-            Label(energy ? "Energía de cuatro portadoras · A azul / B naranja" : "Amplitud digital · escala solo visual, muestras sin modificar", Left, 2);
+            Label(energy ? owner.SingleChannel ? "Energía BFSK · 1200 / 1900 Hz" : "Energía de cuatro portadoras · A azul / B naranja" : "Amplitud digital · escala solo visual, muestras sin modificar", Left, 2);
             if (owner.map is not { } map) { Label("Sin señal disponible", Left, Top + 20); return; }
-            if (energy && map.Windows.Count == 0) Label("Capturando: mapa FDM disponible al finalizar", Left, Top + 8);
+            if (energy && map.Windows.Count == 0) Label("Capturando: mapa de energía disponible al finalizar", Left, Top + 8);
             Label($"{owner.start:0.######} s", Left, Top + h + 6);
             Label($"{owner.end:0.######} s", Math.Max(Left, ActualWidth - 108), Top + h + 6);
             for (int tick = 1; tick < 4; tick++) Label($"{owner.start + (owner.end - owner.start) * tick / 4:0.####} s", Left + w * tick / 4 - 15, Top + h + 6);
@@ -410,12 +435,13 @@ public sealed class SignalMonitorView : UserControl
                     int last = Math.Clamp((int)Math.Ceiling((b - owner.start) / (owner.end - owner.start) * columns), first + 1, columns);
                     for (int i = first; i < last; i++) for (int row = 0; row < 4; row++) cells[row, i] = Math.Max(cells[row, i], frame.Energy(row));
                 }
-                for (int row = 0; row < 4; row++) for (int i = 0; i < columns; i++)
+                int rows = owner.SingleChannel ? 2 : 4;
+                for (int row = 0; row < rows; row++) for (int i = 0; i < columns; i++)
                 {
                     double level = Math.Clamp((CarrierEnergyMap.Decibels(cells[row, i]) + 100) / 100, 0, 1);
                     var color = row < 2 ? Color.FromRgb(105, 183, 255) : Color.FromRgb(255, 179, 107);
                     var brush = new SolidColorBrush(Color.FromArgb((byte)(level * 255), color.R, color.G, color.B));
-                    paint.DrawRectangle(brush, null, new Rect(Left + i * w / columns, Top + row * h / 4 + 1, w / columns + .1, Math.Max(1, h / 4 - 2)));
+                    paint.DrawRectangle(brush, null, new Rect(Left + i * w / columns, Top + row * h / rows + 1, w / columns + .1, Math.Max(1, h / rows - 2)));
                 }
                 drawingKey = key;
                 }
@@ -448,7 +474,7 @@ public sealed class SignalMonitorView : UserControl
             if (e > s) dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(32, 220, 235, 255)), new Pen(Brushes.SlateGray, .5), new Rect(s, Top, e - s, h));
             if (owner.cursor >= owner.start && owner.cursor <= owner.end) dc.DrawLine(new Pen(Brushes.White, 1), new(X(owner.cursor), Top), new(X(owner.cursor), Top + h));
             dc.Pop();
-            if (energy) for (int i = 0; i < 4; i++) Label($"{(i < 2 ? "A" : "B")} {CarrierEnergyMap.Frequencies[i]:0} Hz", 2, Top + (i + .5) * h / 4 - 8, i < 2 ? Brushes.LightSkyBlue : Brushes.SandyBrown);
+            if (energy) for (int i = 0; i < (owner.SingleChannel ? 2 : 4); i++) Label($"{(i < 2 ? "A" : "B")} {CarrierEnergyMap.Frequencies[i]:0} Hz", 2, Top + (i + .5) * h / (owner.SingleChannel ? 2 : 4) - 8, i < 2 ? Brushes.LightSkyBlue : Brushes.SandyBrown);
             else
             {
                 double limit = owner.scale.SelectedIndex == 0 && map.Peak > 0 ? map.Peak * 1.1 : 1;

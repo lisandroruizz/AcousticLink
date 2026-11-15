@@ -6,11 +6,27 @@ public sealed record ContinuousReception(long Id, long StartSample, DateTimeOffs
     int SampleRate, float[] Samples, FdmTextReceiveResult Result, bool UsesHamming)
 {
     public Guid SessionId { get; init; }
-    public string Label => $"#{Id} · {DetectedAt:HH:mm:ss} · A: {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()} · B: {Result.ChannelB.Text ?? Result.ChannelB.State.ToString()}";
+    public bool IsBfsk { get; init; }
+    public string Label => IsBfsk
+        ? $"#{Id} · BFSK · {DetectedAt:HH:mm:ss} · {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()}"
+        : $"#{Id} · FDM · {DetectedAt:HH:mm:ss} · A: {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()} · B: {Result.ChannelB.Text ?? Result.ChannelB.State.ToString()}";
+}
+
+public interface IContinuousTextReceiver
+{
+    int BufferedSamples { get; }
+    long BufferOrigin { get; }
+    ReadOnlyMemory<float> AvailableSamples { get; }
+    long ReceptionCount { get; }
+    long EvaluatedHeaderStarts { get; }
+    LiveFdmReception? Current { get; }
+    event Action<ContinuousReception>? Received;
+    void Append(ReadOnlySpan<float> samples, CancellationToken token = default);
+    void Complete(CancellationToken token = default);
 }
 
 // Un escritor. El dispositivo permanece abierto; solo se rearma el lector de una trama.
-public sealed class ContinuousFdmReceiver
+public sealed class ContinuousFdmReceiver : IContinuousTextReceiver
 {
     public const int HistoryLimit = 10;
     public Guid SessionId { get; } = Guid.NewGuid();

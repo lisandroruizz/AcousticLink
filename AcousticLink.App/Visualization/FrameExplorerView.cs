@@ -10,6 +10,19 @@ public sealed class FrameExplorerView : UserControl
 {
     public bool FitWorkspace { get; set; }
     private readonly ComboBox channels = new() { ItemsSource = new[] { "Canal A", "Canal B" }, SelectedIndex = 0 };
+    private bool singleChannel;
+    public bool SingleChannel
+    {
+        get => singleChannel;
+        set
+        {
+            singleChannel = value;
+            channels.ItemsSource = value ? new[] { "Canal BFSK" } : new[] { "Canal A", "Canal B" };
+            channels.SelectedIndex = 0;
+            channels.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+            if (result is not null) Render();
+        }
+    }
     private readonly ComboBox representation = new() { ItemsSource = new[] { "Símbolos recibidos", "Bits originales reconstruidos" }, SelectedIndex = 0 };
     private readonly TextBlock scope = new();
     private readonly UniformGrid segments = new() { Columns = 4, Margin = new Thickness(0, 4, 0, 4) };

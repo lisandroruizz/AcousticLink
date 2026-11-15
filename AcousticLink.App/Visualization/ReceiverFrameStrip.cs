@@ -7,6 +7,8 @@ namespace AcousticLink.App.Visualization;
 
 public sealed class ReceiverFrameStrip : FrameworkElement
 {
+    private bool singleChannel;
+    public bool SingleChannel { get => singleChannel; set { singleChannel = value; Height = value ? 30 : 58; InvalidateVisual(); } }
     public FdmTextReceiveResult? Reception { get; set; }
     private CarrierEnergyMap? data;
     private double cursor;
@@ -20,7 +22,7 @@ public sealed class ReceiverFrameStrip : FrameworkElement
         Brush[] colors = [Brushes.SlateGray, Brushes.SteelBlue, Brushes.MediumPurple, Brushes.DodgerBlue, Brushes.SeaGreen, Brushes.DimGray];
         var fieldsA = ReceptionTimeline.Fields(Reception, false); var fieldsB = ReceptionTimeline.Fields(Reception, true);
         double total = Math.Max(data?.Signal.Duration ?? 0, fieldsA.Concat(fieldsB).Select(f => f.End).DefaultIfEmpty(0).Max());
-        for (int row = 0; row < 2; row++)
+        for (int row = 0; row < (SingleChannel ? 1 : 2); row++)
         {
             var fields = row == 0 ? fieldsA : fieldsB; double y = row * 28;
             var channel = row == 0 ? Reception?.ChannelA : Reception?.ChannelB;

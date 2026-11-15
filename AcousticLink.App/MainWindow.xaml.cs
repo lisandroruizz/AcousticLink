@@ -228,6 +228,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void UpdateFdmTextInfo()
     {
         if (FdmTextInfoText is null) return;
+        if (IsBfskTransmit) { UpdateBfskTextInfo(); return; }
         bool validationStatus = !playing && FdmTextStatusText.Text.Length > 0 && FdmTextStatusText.Text == FdmTextInfoText.Text;
         var a = FdmTextInputValidation.Check(FdmTextATextBox.Text, "A");
         var b = FdmTextInputValidation.Check(FdmTextBTextBox.Text, "B");
@@ -270,6 +271,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async void TransmitFdmText_Click(object sender, RoutedEventArgs e)
     {
+        if (IsBfskTransmit) { await TransmitBfskTextAsync(); return; }
         string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text;
         bool useHamming = UseHammingTransmitCheckBox.IsChecked == true;
         var profile = SelectedFdmProfile;
@@ -347,6 +349,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         FdmTextBTextBox.IsEnabled = enabled;
         TransmitFdmTextButton.IsEnabled = enabled && fdmTextsValid;
         UseHammingTransmitCheckBox.IsEnabled = enabled;
+        TransmitModeComboBox.IsEnabled = enabled;
     }
 
     private void ShowPlaybackError(Exception exception)
@@ -364,7 +367,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         captureBusy = true;
         SaveCaptureButton.IsEnabled = false;
         bool decodeDuringCapture = DecodeDuringCaptureCheckBox.IsChecked == true;
-        DecodeDuringCaptureCheckBox.IsEnabled = UseHammingReceiveCheckBox.IsEnabled = RecoverReceiveErasuresCheckBox.IsEnabled = false;
+        DecodeDuringCaptureCheckBox.IsEnabled = UseHammingReceiveCheckBox.IsEnabled = RecoverReceiveErasuresCheckBox.IsEnabled = ReceiverModeComboBox.IsEnabled = false;
         CaptureStatusText.Text = "Inicializando micrófono...";
         try
         {
@@ -468,6 +471,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var recording = audioSelection.Current?.Audio;
         QueueLiveReception();
         DecodeDuringCaptureCheckBox.IsEnabled = !capture.IsRecording && !captureBusy;
+        ReceiverModeComboBox.IsEnabled = !capture.IsRecording && !captureBusy && !analyzing && continuousListening is null;
         CaptureProgressBar.Value = recording is null ? 0 : Math.Min(1, recording.GetMetrics().DurationSeconds / recording.MaximumDurationSeconds);
         if (capture.IsRecording && !captureBusy && ReferenceEquals(recording, capture.Recording) && recording is not null)
             UpdateLiveWaveform(recording);
@@ -862,6 +866,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async void ReceiveFdmText_Click(object sender, RoutedEventArgs e)
     {
+        if (IsBfskReceive) { await ReceiveBfskTextAsync(); return; }
         var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         StopLiveReception();
@@ -922,8 +927,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             $"CRC: {(channel.CrcValid is true ? "válido" : channel.CrcValid is false ? "incorrecto" : "no comprobado")}\n" +
             (channel.State == FdmTextReceiveState.Valid ? $"Texto: {channel.Text}\n" : "") + channel.Reason + stats;
         }
-        ReceivedFdmText.Text = $"Sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
-            result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + "\n" + Describe("B", result.ChannelB);
+        ReceivedFdmText.Text = $"{(IsBfskReceive ? "BFSK — un canal" : "FDM — dos canales")} · sincronización: {result.Synchronization.State} · inicio: {result.Synchronization.StartSeconds:0.000} s\n" +
+            result.Synchronization.Reason + "\n" + Describe("A", result.ChannelA) + (IsBfskReceive ? "" : "\n" + Describe("B", result.ChannelB));
         void ShowChannel(TextBlock target, FdmTextChannelResult channel)
         {
             target.Text = $"Sincronización: {result.Synchronization.State} · cabecera {(channel.HeaderValid ? "válida" : "no validada")}\n" +

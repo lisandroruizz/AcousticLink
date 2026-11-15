@@ -24,24 +24,34 @@ public sealed class BfskSequenceDecoder
 
     public BfskSequenceResult Decode(ReadOnlySpan<float> samples, int sampleRate,
         double startSeconds, int bitCount)
+        => DecodeCore(samples, sampleRate, startSeconds, bitCount, MaximumBits);
+
+    internal BfskSequenceResult DecodeMessageBlock(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int bitCount, CancellationToken token = default, int firstSymbol = 0)
+        => DecodeCore(samples, sampleRate, startSeconds, bitCount,
+            Protocol.FdmTextFrameBuilder.MaximumProtectedFrameBits, token, firstSymbol);
+
+    private BfskSequenceResult DecodeCore(ReadOnlySpan<float> samples, int sampleRate,
+        double startSeconds, int bitCount, int maximumBits, CancellationToken token = default, int firstSymbol = 0)
     {
         if (sampleRate <= 2 * BfskToneGenerator.Bit1Frequency)
             throw new ArgumentOutOfRangeException(nameof(sampleRate));
         if (!double.IsFinite(startSeconds) || startSeconds < 0)
             throw new ArgumentOutOfRangeException(nameof(startSeconds), "El inicio debe ser finito y no negativo.");
-        if (bitCount < 1 || bitCount > MaximumBits)
-            throw new ArgumentOutOfRangeException(nameof(bitCount), "Se requieren entre 1 y 64 bits.");
+        if (bitCount < 1 || bitCount > maximumBits || firstSymbol < 0 || firstSymbol + bitCount > maximumBits)
+            throw new ArgumentOutOfRangeException(nameof(bitCount));
 
         // Calcular cada límite desde el mismo origen: nunca sumar pasos redondeados.
         double origin = startSeconds * sampleRate;
         double step = BitDurationSeconds * sampleRate;
-        double end = Math.Round(origin + bitCount * step);
+        double end = Math.Round(origin + (firstSymbol + bitCount) * step);
         if (!double.IsFinite(origin) || end > samples.Length)
             throw new ArgumentException("La secuencia completa debe estar dentro de las muestras disponibles.");
 
         var symbols = new List<BfskSymbolResult>(bitCount);
-        for (int i = 0; i < bitCount; i++)
+        for (int i = firstSymbol; i < firstSymbol + bitCount; i++)
         {
+            token.ThrowIfCancellationRequested();
             int start = (int)Math.Round(origin + i * step);
             int finish = (int)Math.Round(origin + (i + 1) * step);
             int analysisStart = (int)Math.Round(origin + (i + 0.2) * step);

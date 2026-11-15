@@ -11,7 +11,14 @@ public sealed record LiveFdmReception(FdmTextReceiveResult Result, int SampleCou
 
 // Una sesión, una transmisión. El propietario serializa Append/Complete en su worker.
 // El límite es el mismo de captura: no hay cola ilimitada ni copias del prefijo completo.
-public sealed class IncrementalFdmTextReceiver
+public interface IIncrementalTextReceiver
+{
+    int Count { get; }
+    LiveFdmReception Append(ReadOnlySpan<float> added, CancellationToken token = default);
+    LiveFdmReception Complete(CancellationToken token = default);
+}
+
+public sealed class IncrementalFdmTextReceiver : IIncrementalTextReceiver
 {
     private readonly float[] samples;
     private readonly int rate;

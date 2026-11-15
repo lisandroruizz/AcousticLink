@@ -21,20 +21,21 @@
        <TabControl x:Name="DashboardTools" Background="Transparent" BorderThickness="0"><TabItem Header="Operaciones"><ScrollViewer x:Name="DashboardOperationScroll" Background="{StaticResource PageBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="0,8,12,0">
             <TextBlock Text="Centro de operaciones" Style="{StaticResource Heading}" />
+            <ComboBox Width="230" HorizontalAlignment="Left" Margin="0,0,0,8" SelectedIndex="{Binding SelectedIndex, ElementName=TransmitModeComboBox, Mode=TwoWay}" IsEnabled="{Binding IsEnabled, ElementName=TransmitModeComboBox}"><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition />
               </Grid.ColumnDefinitions>
-              <Border Grid.Column="0" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelABrush}">
+              <Border x:Name="DashboardTransmitACard" Grid.Column="0" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelABrush}">
                 <StackPanel>
                   <TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" FontWeight="Bold" />
                   <TextBlock Text="1200 / 1900 Hz · 1–8 bytes UTF-8" Margin="0,4,0,12" />
                   <TextBox Text="{Binding Text, ElementName=FdmTextATextBox, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsEnabled, ElementName=FdmTextATextBox}" />
                 </StackPanel>
               </Border>
-              <Border Grid.Column="2" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelBBrush}">
+              <Border Grid.Column="2" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelBBrush}" Visibility="{Binding Visibility, ElementName=TransmitChannelBPanel}">
                 <StackPanel>
                   <TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="Bold" />
                   <TextBlock Text="3000 / 3700 Hz · 1–8 bytes UTF-8" Margin="0,4,0,12" />
@@ -44,10 +45,10 @@
             </Grid>
 <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>            <Border x:Name="DashboardConfiguration" Style="{StaticResource OperationPanel}">
               <StackPanel>
-                <TextBlock Text="Configuración de transmisión" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Text, ElementName=TransmitConfigurationTitle}" FontWeight="SemiBold" />
                 <ui:ToggleSwitch Content="Usar Hamming (7,4)" Margin="0,8" IsChecked="{Binding IsChecked, ElementName=UseHammingTransmitCheckBox, Mode=TwoWay}" IsEnabled="{Binding IsEnabled, ElementName=UseHammingTransmitCheckBox}" />
-                <TextBlock Text="CRC-32 permanente · 2 canales FDM · 48 kHz · 0,10 s/símbolo" />
-                <ComboBox ItemsSource="{Binding ItemsSource, ElementName=FdmProfileComboBox}" SelectedItem="{Binding SelectedItem, ElementName=FdmProfileComboBox, Mode=TwoWay}" IsEnabled="{Binding IsEnabled, ElementName=FdmProfileComboBox}" Margin="0,10" />
+                <TextBlock Text="{Binding Text, ElementName=TransmitModeSummaryText}" />
+                <ComboBox ItemsSource="{Binding ItemsSource, ElementName=FdmProfileComboBox}" SelectedItem="{Binding SelectedItem, ElementName=FdmProfileComboBox, Mode=TwoWay}" IsEnabled="{Binding IsEnabled, ElementName=FdmProfileComboBox}" Visibility="{Binding Visibility, ElementName=FdmProfilePanel}" Margin="0,10" />
                 <Expander Header="Composición de las tramas"><TextBlock Text="{Binding Text, ElementName=FdmTextInfoText}" /></Expander><TextBlock Text="{Binding Text, ElementName=TransmitDurationText}" FontSize="20" Margin="0,8,0,0"/>
                 <Button Content="Transmitir mensajes" Style="{StaticResource Primary}" Margin="0,14,0,0" Click="TransmitFdmText_Click" IsEnabled="{Binding IsEnabled, ElementName=TransmitFdmTextButton}" />
                 <TextBlock Text="{Binding Text, ElementName=FdmTextStatusText}" Margin="0,10,0,0" />
@@ -59,13 +60,13 @@
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition />
               </Grid.ColumnDefinitions>
-              <Border Grid.Column="0" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelABrush}">
+              <Border x:Name="DashboardReceptionACard" Grid.Column="0" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelABrush}">
                 <StackPanel>
                   <TextBlock Text="RECEPCIÓN A" Foreground="{StaticResource ChannelABrush}" />
                   <TextBlock Text="{Binding SummaryText, ElementName=ReceptionAView}" />
                 </StackPanel>
               </Border>
-              <Border Grid.Column="2" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelBBrush}">
+              <Border x:Name="DashboardReceptionBCard" Grid.Column="2" Style="{StaticResource OperationPanel}" BorderBrush="{StaticResource ChannelBBrush}" Visibility="{Binding Visibility, ElementName=ReceptionChannelBPanel}">
                 <StackPanel>
                   <TextBlock Text="RECEPCIÓN B" Foreground="{StaticResource ChannelBBrush}" />
                   <TextBlock Text="{Binding SummaryText, ElementName=ReceptionBView}" />
@@ -73,7 +74,7 @@
               </Border>
             </Grid>
           </StackPanel>
-        </ScrollViewer></TabItem><TabItem Header="Monitor de señales"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><WrapPanel Margin="4,6"><ComboBox x:Name="MonitorSourceComboBox" Width="250" SelectedIndex="0" SelectionChanged="MonitorSource_Changed"><ComboBoxItem Content="Audio seleccionado · micrófono / WAV"/><ComboBoxItem Content="Última señal digital FDM generada"/></ComboBox><Button Content="Analizar / reintentar" Click="AnalyzeMonitor_Click" Margin="8,0"/><Button x:Name="CancelMonitorButton" Content="Cancelar monitor" Click="CancelMonitor_Click" IsEnabled="False"/></WrapPanel><visual:SignalMonitorView x:Name="DashboardSignalMonitor" Grid.Row="1"/></Grid></TabItem></TabControl>
+        </ScrollViewer></TabItem><TabItem Header="Monitor de señales"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><WrapPanel Margin="4,6"><ComboBox x:Name="MonitorSourceComboBox" Width="250" SelectedIndex="0" SelectionChanged="MonitorSource_Changed"><ComboBoxItem Content="Audio seleccionado · micrófono / WAV"/><ComboBoxItem Content="Última señal digital generada"/></ComboBox><Button Content="Analizar / reintentar" Click="AnalyzeMonitor_Click" Margin="8,0"/><Button x:Name="CancelMonitorButton" Content="Cancelar monitor" Click="CancelMonitor_Click" IsEnabled="False"/></WrapPanel><visual:SignalMonitorView x:Name="DashboardSignalMonitor" Grid.Row="1"/></Grid></TabItem></TabControl>
       </TabItem>
       <TabItem Header="Emisor">
         <Grid x:Name="TransmitterWorkspace" Background="{StaticResource PageBrush}">
@@ -85,17 +86,19 @@
                   <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
+                      <TextBlock Text="MODALIDAD DE TRANSMISIÓN" FontSize="12" Foreground="#AABBD0" Margin="0,6,0,4"/>
+                      <ComboBox x:Name="TransmitModeComboBox" SelectedIndex="1" Width="260" HorizontalAlignment="Left" SelectionChanged="TransmitMode_Changed" Margin="0,0,0,12"><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
                       <TextBlock Text="MENSAJES A TRANSMITIR" FontSize="12" Foreground="#AABBD0" Margin="0,6,0,12"/>
                       <TextBlock Text="Canal A" Foreground="{StaticResource ChannelABrush}" FontSize="20" FontWeight="SemiBold"/>
                       <TextBlock Text="1200 / 1900 Hz" Foreground="#AABBD0"/>
                       <TextBox x:Name="FdmTextATextBox" Text="Hola" Width="420" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left" FontSize="24" Margin="0,8,0,4" TextChanged="FdmText_TextChanged"/>
                       <TextBlock x:Name="TransmitABytesText" Foreground="#AABBD0" FontSize="12"/>
-                      <Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
-                      <TextBlock Text="Canal B" Foreground="{StaticResource ChannelBBrush}" FontSize="20" FontWeight="SemiBold"/>
-                      <TextBlock Text="3000 / 3700 Hz" Foreground="#AABBD0"/>
-                      <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Width="420" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left" FontSize="24" Margin="0,8,0,4" TextChanged="FdmText_TextChanged"/>
-                      <TextBlock x:Name="TransmitBBytesText" Foreground="#AABBD0" FontSize="12"/>
-                      <Border Background="{StaticResource ResultSurfaceBrush}" CornerRadius="6" Padding="12" Margin="0,18,0,0"><StackPanel><TextBlock Text="Vista previa de la señal emitida" FontWeight="SemiBold"/><TextBlock Text="Se conserva el buffer digital realmente preparado para reproducción. No representa una medición acústica." Foreground="{StaticResource MutedBrush}" FontSize="13" Margin="0,6,0,8"/><Button Content="Preparar vista previa" Click="PrepareSignalPreview_Click" Margin="0,0,0,6"/><Button Content="Explorar última señal generada" Click="OpenGeneratedMonitor_Click"/></StackPanel></Border>
+                      <StackPanel x:Name="TransmitChannelBPanel"><Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
+                        <TextBlock Text="Canal B" Foreground="{StaticResource ChannelBBrush}" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock Text="3000 / 3700 Hz" Foreground="#AABBD0"/>
+                        <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Width="420" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left" FontSize="24" Margin="0,8,0,4" TextChanged="FdmText_TextChanged"/>
+                        <TextBlock x:Name="TransmitBBytesText" Foreground="#AABBD0" FontSize="12"/></StackPanel>
+                      <Border Background="{StaticResource ResultSurfaceBrush}" CornerRadius="6" Padding="12" Margin="0,18,0,0"><StackPanel><TextBlock Text="Vista previa de la señal emitida" FontWeight="SemiBold"/><TextBlock Text="Se conserva el buffer digital realmente preparado para reproducción. No representa una medición acústica." Foreground="{StaticResource MutedBrush}" FontSize="13" Margin="0,6,0,8"/><Button Content="Preparar vista previa" Click="PrepareSignalPreview_Click" Margin="0,0,0,6"/><Button Content="Explorar última señal generada" Click="OpenGeneratedMonitor_Click"/><Button Content="Guardar última señal generada como WAV" Click="SaveGeneratedWav_Click" Margin="0,6,0,0"/></StackPanel></Border>
                     </StackPanel>
                   </ScrollViewer>
                   <StackPanel Grid.Row="1" Margin="0,14,0,0">
@@ -107,9 +110,9 @@
                 <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LineBrush}" ShowsPreview="True" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Focusable="True"/>
                 <Border Grid.Column="2" Background="#101B2B" Padding="16,8">
                   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-                    <TextBlock Text="CONFIGURACIÓN FDM" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                    <TextBlock Text="Perfil de amplitud"/>
-                    <ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" Margin="0,6,0,12"/>
+                    <TextBlock x:Name="TransmitConfigurationTitle" Text="CONFIGURACIÓN FDM" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                    <StackPanel x:Name="FdmProfilePanel"><TextBlock Text="Perfil de amplitud"/>
+                    <ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" Margin="0,6,0,12"/></StackPanel>
                     <ui:ToggleSwitch x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed"/>
                     <TextBlock Text="Seleccionar el mismo modo en el receptor." FontSize="12" Foreground="#AABBD0" Margin="0,6,0,12"/>
                     <Separator Background="{StaticResource LineBrush}"/>
@@ -117,8 +120,8 @@
                     <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap"/>
                     <Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
                     <TextBlock Text="48 kHz · mono · 0,10 s/símbolo"/>
-                    <TextBlock Text="CRC-32 permanente · 1–8 bytes UTF-8 por canal" Foreground="#AABBD0" FontSize="12"/>
-                    <TextBlock Text="Cabecera sin Hamming. El relleno FDM queda fuera del CRC y del bloque protegido." Foreground="#AABBD0" FontSize="12" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="TransmitModeSummaryText" Text="CRC-32 permanente · FDM de dos canales · 48 kHz · 0,10 s/símbolo" Foreground="#AABBD0" FontSize="12"/>
+                    <TextBlock x:Name="TransmitPaddingNote" Text="Cabecera sin Hamming. El relleno FDM queda fuera del CRC y del bloque protegido." Foreground="#AABBD0" FontSize="12" Margin="0,8,0,0"/>
                   </StackPanel></ScrollViewer>
                 </Border>
               </Grid>
@@ -188,7 +191,7 @@
                       </StackPanel>
                     </Border>
                   </ScrollViewer></TabItem></TabControl></TabItem>
-            <TabItem Header="Señal generada"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><WrapPanel Margin="4,6"><TextBlock Text="Último buffer FDM preparado · no es recepción acústica" VerticalAlignment="Center"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Margin="8,0"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click"/></WrapPanel><visual:SignalMonitorView x:Name="GeneratedSignalMonitor" Grid.Row="1"/></Grid></TabItem>
+            <TabItem Header="Señal generada"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><WrapPanel Margin="4,6"><TextBlock Text="Último buffer digital preparado · no es recepción acústica" VerticalAlignment="Center"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Margin="8,0"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click"/></WrapPanel><visual:SignalMonitorView x:Name="GeneratedSignalMonitor" Grid.Row="1"/></Grid></TabItem>
           </TabControl>
         </Grid>
       </TabItem>
@@ -196,6 +199,7 @@
 <Grid x:Name="ReceiverWorkspace" SizeChanged="ReceiverWorkspace_SizeChanged" Background="{StaticResource PageBrush}">
  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
  <WrapPanel Margin="0,4,0,8">
+  <ComboBox x:Name="ReceiverModeComboBox" SelectedIndex="1" Width="195" Margin="0,0,8,0" SelectionChanged="ReceiverMode_Changed" ToolTip="Elegí el modo de la señal capturada o importada; WAV no guarda la modalidad."><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
   <Button x:Name="ContinuousListenButton" Content="Iniciar escucha continua" Click="ContinuousListen_Click" Padding="10,6" Margin="0,0,8,0"/>
   <TextBlock x:Name="ContinuousOperationalText" Text="Micrófono apagado · escucha detenida" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Estado de la sesión actual. La preferencia de inicio automático se configura por separado."/>
   <Button x:Name="StartCaptureButton" Content="● Capturar" Padding="12,6" Margin="0,0,4,0" Click="StartCapture_Click"/>
@@ -211,8 +215,8 @@
   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="6" x:Name="ReceiverDividerColumn"/><ColumnDefinition x:Name="ReceiverInspectorColumn" Width="280" MinWidth="240" MaxWidth="480"/></Grid.ColumnDefinitions>
   <TabControl x:Name="ReceiverTools" ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
    <TabItem Header="Mensajes"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,6,8,0"><Button Content="Abrir señal y detección" Click="OpenReceptionSignal_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/><Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
-     <StackPanel><TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionAView"/></StackPanel>
-     <StackPanel Grid.Column="2"><TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionBView"/></StackPanel>
+     <StackPanel x:Name="ReceptionChannelAPanel"><TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionAView"/></StackPanel>
+     <StackPanel x:Name="ReceptionChannelBPanel" Grid.Column="2"><TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionBView"/></StackPanel>
     </Grid><Expander x:Name="CaptureInstrumentationDetails" Header="Instrumentación de captura · detalles" Margin="0,12,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <DockPanel><ComboBox x:Name="WaveformScaleComboBox" Style="{StaticResource InspectorSelector}" DockPanel.Dock="Right" SelectedIndex="1" Width="185" SelectionChanged="WaveformScale_Changed"><ComboBoxItem Content="Escala original ±1"/><ComboBoxItem Content="Ajustar visualización"/></ComboBox><StackPanel><TextBlock x:Name="WaveformInfoText" Text="Sin señal disponible" FontSize="13" Foreground="#AABBD0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="WaveformScaleText" Text="Ajuste solo visual · no modifica las muestras" FontSize="13" Foreground="#AABBD0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/></StackPanel></DockPanel>
       <visual:WaveformView x:Name="ReceivedWaveform" Height="180" Grid.Row="1" Margin="0,6" MinHeight="180"/>
@@ -249,7 +253,7 @@
    </StackPanel></ScrollViewer></TabItem>
    <TabItem Header="Detalle"><TabControl x:Name="ReceiverDetailTabs" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
     <TabItem Header="A"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><visual:ReceptionInspectorView x:Name="ReceptionAInspector" Channel="A" Result="{Binding Result, ElementName=ReceptionAView}"/><Expander Header="Diagnóstico completo"><StackPanel><TextBlock Text="{Binding DiagnosticText, ElementName=ReceptionAView}"/></StackPanel></Expander><Expander Header="Resumen técnico"><TextBlock x:Name="ReceivedChannelAText" Text="Sin analizar"/></Expander></StackPanel></ScrollViewer></TabItem>
-    <TabItem Header="B"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><visual:ReceptionInspectorView x:Name="ReceptionBInspector" Channel="B" Result="{Binding Result, ElementName=ReceptionBView}"/><Expander Header="Diagnóstico completo"><StackPanel><TextBlock Text="{Binding DiagnosticText, ElementName=ReceptionBView}"/></StackPanel></Expander><Expander Header="Resumen técnico"><TextBlock x:Name="ReceivedChannelBText" Text="Sin analizar"/></Expander></StackPanel></ScrollViewer></TabItem>
+    <TabItem x:Name="ReceptionBDetailTab" Header="B"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><visual:ReceptionInspectorView x:Name="ReceptionBInspector" Channel="B" Result="{Binding Result, ElementName=ReceptionBView}"/><Expander Header="Diagnóstico completo"><StackPanel><TextBlock Text="{Binding DiagnosticText, ElementName=ReceptionBView}"/></StackPanel></Expander><Expander Header="Resumen técnico"><TextBlock x:Name="ReceivedChannelBText" Text="Sin analizar"/></Expander></StackPanel></ScrollViewer></TabItem>
     <TabItem Header="Global"><ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto."/></ScrollViewer></TabItem>
    </TabControl></TabItem>
   </TabControl></Border>

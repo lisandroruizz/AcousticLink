@@ -10,6 +10,7 @@ public sealed record MonitorSignal(ReadOnlyMemory<float> Samples, int SampleRate
 {
     public object? SourceId { get; init; }
     public FdmTransmissionInfo? Transmission { get; init; }
+    public string? BfskFrameBits { get; init; }
     public ReadOnlyMemory<float> ChannelA { get; init; }
     public ReadOnlyMemory<float> ChannelB { get; init; }
     public double Duration => Samples.Length / (double)SampleRate;

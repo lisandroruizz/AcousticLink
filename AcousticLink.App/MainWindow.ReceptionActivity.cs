@@ -29,6 +29,7 @@ public partial class MainWindow
             : session is not null ? "CAPTURA FINALIZADA · RESULTADOS INCREMENTALES RETENIDOS"
             : result is not null ? "ANÁLISIS MANUAL COMPLETO · INSPECCIÓN POSTERIOR"
             : imported ? "WAV IMPORTADO · INSPECCIÓN POSTERIOR" : "CAPTURA FINALIZADA · INSPECCIÓN POSTERIOR";
+        mode = (IsBfskReceive ? "BFSK · " : "FDM · ") + mode;
         var activity = new ReceptionActivity(mode, imported ? "WAV" : "Micrófono", audio.SampleRate, metrics.Count,
             snapshot?.SampleCount ?? (ReferenceEquals(presentedReceptionSource, audio) ? presentedReceptionSamples : 0),
             ReceptionChannelActivity.From(result?.ChannelA, processing), ReceptionChannelActivity.From(result?.ChannelB, processing));

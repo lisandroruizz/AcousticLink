@@ -39,7 +39,7 @@ public sealed class FdmTextFrameBuilder
             b with { TransmittedBits = b.FrameBits.PadRight(total, '0') });
     }
 
-    private FdmTextChannelFrame BuildChannel(string text, string channel, bool useHamming)
+    internal FdmTextChannelFrame BuildChannel(string text, string channel, bool useHamming)
     {
         // El códec es la única fuente de UTF-8, longitud, orden de bits y CRC.
         string bits = codec.Encode(text);

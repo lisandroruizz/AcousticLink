@@ -20,7 +20,8 @@ public partial class MainWindow
         public readonly CancellationTokenSource Cancellation = new();
         public Task Worker = Task.CompletedTask;
         public Task? StopTask;
-        public ContinuousFdmReceiver? Receiver;
+        public IContinuousTextReceiver? Receiver;
+        public bool IsBfsk;
         public volatile bool Stopping;
         public bool MicrophoneStarted;
         public long InputSamples, AcceptedSamples, ConsumedSamples, LastInput, LastProgress, LastUi, DiscardedOnStop, HeaderStarts;
@@ -62,12 +63,12 @@ public partial class MainWindow
         continuousLastError = "";
         ReceiverSignalMonitor.BeginLive("Escucha continua · esperando muestras reales…");
         if (MonitorSourceComboBox.SelectedIndex == 0) DashboardSignalMonitor.BeginLive("Micrófono continuo · esperando muestras…");
-        var session = new ListeningSession(); continuousListening = session;
+        var session = new ListeningSession { IsBfsk = IsBfskReceive }; continuousListening = session;
         continuousHistory.Clear(); continuousHistorySelected = false;
         bool hamming = UseHammingReceiveCheckBox.IsChecked == true, erasures = RecoverReceiveErasuresCheckBox.IsChecked == true;
-        ContinuousStatusText.Text = "ESCUCHA CONTINUA · abriendo micrófono…";
+        ContinuousStatusText.Text = $"ESCUCHA CONTINUA {(session.IsBfsk ? "BFSK" : "FDM")} · abriendo micrófono…";
         ReceptionAView.Clear("Escucha automática · buscando cabecera A");
-        ReceptionBView.Clear("Escucha automática · buscando cabecera B");
+        ReceptionBView.Clear(session.IsBfsk ? "Canal B no utilizado" : "Escucha automática · buscando cabecera B");
         ReceivedFdmText.Text = "Recepción automática · esperando una cabecera válida; no requiere pulsar Recibir mensajes.";
         session.Worker = ListenWorkerAsync(session, hamming, erasures);
         RefreshContinuousControls();
@@ -111,7 +112,8 @@ public partial class MainWindow
             {
                 if (session.Receiver is null)
                 {
-                    session.Receiver = new(block.Rate, hamming, erasures);
+                    session.Receiver = session.IsBfsk ? new ContinuousBfskReceiver(block.Rate, hamming, erasures)
+                        : new ContinuousFdmReceiver(block.Rate, hamming, erasures);
                     session.Receiver.Received += entry =>
                     {
                         lock (session.HistoryLock)
@@ -165,7 +167,7 @@ public partial class MainWindow
         AddContinuousHistory(entries);
         string last = continuousHistory.LastOrDefault()?.Label ?? "sin recepciones";
         ContinuousStatusText.Text = $"ESCUCHA CONTINUA · MICRÓFONO ACTIVO · recepciones {update.ReceptionCount} · última: {last}";
-        var activity = new ReceptionActivity("ESCUCHA CONTINUA · buscando/recibiendo", "Micrófono (segmento gráfico local)", map.Signal.SampleRate,
+        var activity = new ReceptionActivity($"ESCUCHA CONTINUA {(session.IsBfsk ? "BFSK" : "FDM")} · buscando/recibiendo", "Micrófono (segmento gráfico local)", map.Signal.SampleRate,
             (int)Math.Min(int.MaxValue, Interlocked.Read(ref session.InputSamples)), (int)Math.Min(int.MaxValue, update.Processed),
             ReceptionChannelActivity.From(snapshot?.Result.ChannelA, true), ReceptionChannelActivity.From(snapshot?.Result.ChannelB, true));
         LiveReceptionInspector.Show(activity);
@@ -185,6 +187,7 @@ public partial class MainWindow
             {
                 ReceptionAView.Show(shown.ChannelA, shown.Synchronization, "A");
                 ReceptionBView.Show(shown.ChannelB, shown.Synchronization, "B");
+                if (session.IsBfsk) ReceivedFdmText.Text = DescribeBfskReception(shown.ChannelA, shown.Synchronization.Reason);
             }
         }
         if (continuousHistorySelected) ContinuousStatusText.Text += " · inspección histórica retenida";
@@ -215,6 +218,7 @@ public partial class MainWindow
         {
             var map = await Task.Run(() => CarrierEnergyMap.Analyze(new(entry.Samples, entry.SampleRate, MonitorSignalOrigin.Microphone, $"Histórico #{entry.Id} · no captura nueva") { SourceId = entry }));
             if (closing || !ReferenceEquals(ContinuousHistoryComboBox.SelectedItem, entry)) return;
+            ApplyReceptionModeVisual(entry.IsBfsk);
             ReceiverSignalMonitor.SetReception(null);
             ReceiverSignalMonitor.Show(map); ReceiverSignalMonitor.SetReception(entry.Result, map.Signal.Duration);
             var activity = new ReceptionActivity($"HISTÓRICO · recepción #{entry.Id} · no audio nuevo", "Micrófono", entry.SampleRate, entry.Samples.Length, entry.Samples.Length,
@@ -225,12 +229,15 @@ public partial class MainWindow
             WaveformInfoText.Text = $"Histórico #{entry.Id} · {map.Signal.Duration:0.00} s · {entry.SampleRate} Hz";
             ReceivedFrameExplorer.Show(entry.Result);
             ReceptionAView.Show(entry.Result.ChannelA, entry.Result.Synchronization, "A"); ReceptionBView.Show(entry.Result.ChannelB, entry.Result.Synchronization, "B");
+            if (entry.IsBfsk) ReceivedFdmText.Text = $"Histórico #{entry.Id} · " +
+                DescribeBfskReception(entry.Result.ChannelA, entry.Result.Synchronization.Reason);
         }
         catch (Exception ex) { if (!closing && ReferenceEquals(ContinuousHistoryComboBox.SelectedItem, entry)) ContinuousStatusText.Text = $"Histórico no disponible: {ex.Message}"; }
     }
     private void ContinuousLive_Click(object sender, RoutedEventArgs e)
     {
         ContinuousHistoryComboBox.SelectedIndex = -1; continuousHistorySelected = false;
+        ApplyReceptionModeVisual(IsBfskReceive);
         if (continuousListening is null) { InvalidateAudioAnalysis(); RefreshCapture(); }
         else ReceiverSignalMonitor.Clear("Volviendo a muestras nuevas del micrófono…");
     }
@@ -357,7 +364,7 @@ public partial class MainWindow
             session.Displayed = update;
             Interlocked.Exchange(ref session.LastUi, Stopwatch.GetTimestamp());
         }
-        StartCaptureButton.IsEnabled = LoadWavButton.IsEnabled = UseHammingReceiveCheckBox.IsEnabled = RecoverReceiveErasuresCheckBox.IsEnabled = DecodeDuringCaptureCheckBox.IsEnabled = false;
+        StartCaptureButton.IsEnabled = LoadWavButton.IsEnabled = UseHammingReceiveCheckBox.IsEnabled = RecoverReceiveErasuresCheckBox.IsEnabled = DecodeDuringCaptureCheckBox.IsEnabled = ReceiverModeComboBox.IsEnabled = false;
         StopCaptureButton.IsEnabled = false;
         DisableManualAudioTools();
         int rate = Volatile.Read(ref session.Rate);

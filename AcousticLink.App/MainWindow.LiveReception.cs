@@ -6,10 +6,10 @@ namespace AcousticLink.App;
 
 public partial class MainWindow
 {
-    private sealed class LiveCaptureReception(CapturedAudio audio, IncrementalFdmTextReceiver receiver, CancellationTokenSource cancellation)
+    private sealed class LiveCaptureReception(CapturedAudio audio, IIncrementalTextReceiver receiver, CancellationTokenSource cancellation)
     {
         public CapturedAudio Audio { get; } = audio;
-        public IncrementalFdmTextReceiver Receiver { get; } = receiver;
+        public IIncrementalTextReceiver Receiver { get; } = receiver;
         public CancellationTokenSource Cancellation { get; } = cancellation;
         public float[] Scratch { get; } = new float[8192];
         public bool Busy, Finished;
@@ -22,11 +22,15 @@ public partial class MainWindow
     private void StartLiveReception(CapturedAudio audio)
     {
         StopLiveReception(); ResetReceptionObservation();
-        liveReception = new(audio, new(audio.SampleRate, UseHammingReceiveCheckBox.IsChecked == true,
-            RecoverReceiveErasuresCheckBox.IsChecked == true, audio.MaximumDurationSeconds),
+        IIncrementalTextReceiver receiver = IsBfskReceive
+            ? new IncrementalBfskTextReceiver(audio.SampleRate, UseHammingReceiveCheckBox.IsChecked == true,
+                RecoverReceiveErasuresCheckBox.IsChecked == true, audio.MaximumDurationSeconds)
+            : new IncrementalFdmTextReceiver(audio.SampleRate, UseHammingReceiveCheckBox.IsChecked == true,
+                RecoverReceiveErasuresCheckBox.IsChecked == true, audio.MaximumDurationSeconds);
+        liveReception = new(audio, receiver,
             CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token));
-        LiveReceptionStatusText.Text = "En vivo · buscando cabeceras A/B";
-        ReceptionAView.Clear("Buscando cabecera A…"); ReceptionBView.Clear("Buscando cabecera B…");
+        LiveReceptionStatusText.Text = IsBfskReceive ? "En vivo · buscando cabecera BFSK" : "En vivo · buscando cabeceras A/B";
+        ReceptionAView.Clear("Buscando cabecera A…"); ReceptionBView.Clear(IsBfskReceive ? "Canal B no utilizado" : "Buscando cabecera B…");
         CancelReceiveFdmTextButton.IsEnabled = true;
         RefreshReceptionActivity();
     }
@@ -66,7 +70,9 @@ public partial class MainWindow
                 || !ReferenceEquals(audioSelection.Current?.Audio, session.Audio) || snapshot is null) return;
             bool changed = session.Snapshot?.Result != snapshot.Result;
             session.Snapshot = snapshot; session.Finished = final;
-            LiveReceptionStatusText.Text = $"{(final ? "Finalizada" : "Recepción en vivo")} · A: {snapshot.ChannelAStatus} · B: {snapshot.ChannelBStatus}";
+            LiveReceptionStatusText.Text = IsBfskReceive
+                ? $"{(final ? "Finalizada" : "Recepción en vivo")} · BFSK: {snapshot.ChannelAStatus}"
+                : $"{(final ? "Finalizada" : "Recepción en vivo")} · A: {snapshot.ChannelAStatus} · B: {snapshot.ChannelBStatus}";
             RefreshReceptionActivity();
             if (changed || final) ShowFdmReception(snapshot.ObservedResult, session.Audio, snapshot.SampleCount / (double)session.Audio.SampleRate);
             CancelReceiveFdmTextButton.IsEnabled = !final;
