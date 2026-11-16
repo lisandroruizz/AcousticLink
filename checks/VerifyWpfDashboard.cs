@@ -53,6 +53,7 @@ var thread = new Thread(() =>
         var editorA = Find<TextBox>("FdmTextATextBox");
         var dashboard = (StackPanel)Find<ScrollViewer>("DashboardOperationScroll").Content;
         var channelGrid = dashboard.Children.OfType<Grid>().First();
+        Require(ReferenceEquals(channelGrid, Find<Grid>("DashboardTransmitGrid")), "Canales del panel general en una única región operativa");
         var dashboardA = ((StackPanel)channelGrid.Children.OfType<Border>().First().Child).Children.OfType<TextBox>().Single();
         Require(dashboardA.Text == editorA.Text && dashboardA.Text == "Hola", "Enlace inicial a editor en pestaña inactiva");
         dashboardA.Text = "ñ";
@@ -104,6 +105,26 @@ var thread = new Thread(() =>
         Require(Grid.GetRow(Find<StackPanel>("TransmitDetailsPanel")) == 1 &&
             Find<Button>("TransmitFdmTextButton").ActualHeight > 0,
             "Emisor apila configuración y conserva Transmitir al ancho mínimo");
+        tabs.SelectedIndex = 0; Pump();
+        Require(Grid.GetRow(Find<Border>("DashboardSignalCard")) == 1 &&
+            Find<Border>("DashboardConfiguration").ActualWidth > 300,
+            "Panel general apila operación y captura en ventana estrecha");
+        var captureCardText = ((StackPanel)Find<Border>("DashboardSignalCard").Child).Children.OfType<TextBlock>().ToArray();
+        var generalState = Find<TextBlock>("GeneralStateText");
+        string previousState = generalState.Text;
+        generalState.Text = "Capturando audio"; Pump();
+        Require(captureCardText.Any(text => text.Text == "Capturando audio"),
+            "La captura manual se refleja en el resumen del receptor");
+        generalState.Text = previousState;
+        tabs.SelectedIndex = 1; tools.SelectedIndex = 1; Pump();
+        var technicalTabs = (TabControl)((TabItem)tools.Items[1]).Content;
+        foreach (int index in new[] { 0, 1, 2, 3 })
+        {
+            technicalTabs.SelectedIndex = index; Pump();
+            var technicalGrid = Find<Grid>(new[] { "BfskTechnicalGrid", "FdmTonesGrid", "FdmSequencesGrid", "FdmFramesGrid" }[index]);
+            Require(technicalGrid.ActualWidth > 300 && technicalGrid.Children.OfType<Border>().All(card => card.ActualHeight > 0),
+                $"Prueba técnica {index} conserva ancho útil y controles visibles");
+        }
         foreach (TabItem tab in tabs.Items)
         {
             tabs.SelectedItem = tab;
@@ -140,14 +161,22 @@ var thread = new Thread(() =>
         if (args.Length > 1)
         {
             System.IO.Directory.CreateDirectory(args[1]);
-            void Capture(string name, int width, int height, int mode, int tool)
+            void Capture(string name, int width, int height, int mode, int tool, int section = 1, int technical = -1)
             {
                 window.Width = width; window.Height = height;
                 Find<ComboBox>("TransmitModeComboBox").SelectedIndex = mode;
+                tabs.SelectedIndex = section;
                 tools.SelectedIndex = tool;
                 if (tool == 1)
-                    ((TabControl)((TabItem)tools.Items[1]).Content).SelectedIndex = mode == 0 ? 0 : 1;
-                Pump(); window.UpdateLayout();
+                    ((TabControl)((TabItem)tools.Items[1]).Content).SelectedIndex = technical < 0 ? mode == 0 ? 0 : 1 : technical;
+                Pump();
+                var frame = new DispatcherFrame();
+                var settle = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                settle.Tick += (_, _) => { settle.Stop(); frame.Continue = false; };
+                settle.Start(); Dispatcher.PushFrame(frame);
+                tabs.BeginAnimation(UIElement.OpacityProperty, null);
+                ((System.Windows.Media.TranslateTransform)tabs.RenderTransform).BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, null);
+                window.UpdateLayout();
                 var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                 bitmap.Render(window);
                 var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
@@ -163,6 +192,31 @@ var thread = new Thread(() =>
             Capture("technical-bfsk.png", 1180, 740, 0, 1);
             Capture("technical-fdm.png", 1180, 740, 1, 1);
             Capture("technical-fdm-minimum.png", 820, 600, 1, 1);
+            Capture("dashboard-fdm-1180.png", 1180, 740, 1, 0, 0);
+            Capture("dashboard-bfsk-1180.png", 1180, 740, 0, 0, 0);
+            Capture("dashboard-fdm-1366.png", 1366, 768, 1, 0, 0);
+            Capture("dashboard-bfsk-1366.png", 1366, 768, 0, 0, 0);
+            Capture("dashboard-logical125.png", 1093, 614, 1, 0, 0);
+            Capture("dashboard-minimum.png", 820, 600, 1, 0, 0);
+            Find<TabControl>("DashboardTools").SelectedIndex = 1;
+            Find<ComboBox>("MonitorSourceComboBox").SelectedIndex = 0;
+            Capture("dashboard-monitor-empty.png", 1180, 740, 1, 0, 0);
+            var syntheticSamples = Enumerable.Range(0, 48000).Select(i => (float)(0.1 * Math.Sin(2 * Math.PI * 1200 * i / 48000))).ToArray();
+            var syntheticSignal = new AcousticLink.App.Visualization.MonitorSignal(syntheticSamples, 48000,
+                AcousticLink.App.Visualization.MonitorSignalOrigin.Generated, "Señal sintética del check");
+            var syntheticMap = AcousticLink.App.Visualization.CarrierEnergyMap.Analyze(syntheticSignal);
+            typeof(MainWindow).GetField("generatedSignal", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, syntheticSignal);
+            typeof(MainWindow).GetField("generatedMap", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, syntheticMap);
+            Find<ComboBox>("MonitorSourceComboBox").SelectedIndex = 1;
+            Capture("dashboard-monitor-synthetic.png", 1180, 740, 1, 0, 0);
+            Find<TabControl>("DashboardTools").SelectedIndex = 0;
+            typeof(MainWindow).GetField("generatedMap", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, null);
+            typeof(MainWindow).GetField("generatedSignal", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, null);
+            Capture("technical-bfsk-final.png", 1180, 740, 0, 1, 1, 0);
+            Capture("technical-fdm-tones-final.png", 1180, 740, 1, 1, 1, 1);
+            Capture("technical-fdm-sequences-final.png", 1180, 740, 1, 1, 1, 2);
+            Capture("technical-fdm-frames-final.png", 1180, 740, 1, 1, 1, 3);
+            Capture("technical-fdm-minimum-final.png", 820, 600, 1, 1, 1, 1);
             Capture("generated-empty.png", 1180, 740, 1, 2);
             tools.SelectedIndex = 0;
             Find<TextBox>("FdmTextBTextBox").Text = "ñññññ";

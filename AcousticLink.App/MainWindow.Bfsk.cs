@@ -19,6 +19,7 @@ public partial class MainWindow
         TransmitChannelBPanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         TransmitModeDescription.Text = bfsk ? "Un mensaje por canal A, sin relleno FDM" : "Dos mensajes en canales simultáneos";
         Grid.SetColumnSpan(DashboardTransmitACard, bfsk ? 3 : 1);
+        UpdateDashboardLayout();
         FdmProfilePanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         TransmitConfigurationTitle.Text = bfsk ? "CONFIGURACIÓN BFSK · CANAL ÚNICO" : "CONFIGURACIÓN FDM";
         TransmitModeSummaryText.Text = bfsk ? "CRC-32 permanente · BFSK de un canal · 48 kHz · 0,10 s/símbolo"
@@ -57,6 +58,7 @@ public partial class MainWindow
         ReceptionChannelBPanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetColumnSpan(ReceptionChannelAPanel, bfsk ? 3 : 1);
         Grid.SetColumnSpan(DashboardReceptionACard, bfsk ? 3 : 1);
+        UpdateDashboardLayout();
         ReceptionBDetailTab.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         ReceivedFrameExplorer.SingleChannel = bfsk;
         ReceiverSignalMonitor.SingleChannel = bfsk;
