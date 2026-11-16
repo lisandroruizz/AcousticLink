@@ -136,6 +136,7 @@ public partial class MainWindow
         var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         StopLiveReception();
+        var diagnostics = StartHistoricalDiagnostics(recording);
         analyzing = true; RefreshCapture();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
         textReceiveCancellation = cancellation;
@@ -150,10 +151,12 @@ public partial class MainWindow
             var result = await Task.Run(() => new BfskTextReceiver().Receive(recording.GetSamples(),
                 recording.SampleRate, cancellation.Token, hamming, erasures), cancellation.Token);
             if (closing || cancellation.IsCancellationRequested || !ReferenceEquals(audioSelection.Current?.Audio, recording)) return;
-            ShowFdmReception(BfskPresentation.AsSingleChannel(result), recording);
+            var presented = BfskPresentation.AsSingleChannel(result);
+            ShowFdmReception(presented, recording);
+            FinishHistoricalDiagnostics(diagnostics, recording, presented);
         }
-        catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción BFSK cancelada."; }
-        catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir BFSK: {ex.Message}"; }
+        catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción BFSK cancelada."; diagnostics.Stop("Análisis posterior cancelado."); ShowReceiverDiagnostics(diagnostics); }
+        catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir BFSK: {ex.Message}"; diagnostics.Stop("Análisis posterior detenido por error: " + ex.Message); ShowReceiverDiagnostics(diagnostics); }
         finally
         {
             textReceiveCancellation = null;

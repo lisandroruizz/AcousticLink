@@ -14,6 +14,7 @@ public partial class MainWindow
 {
     private sealed class ListeningSession
     {
+        public Guid Id { get; } = Guid.NewGuid();
         public const int QueueCapacity = 16;
         public readonly Channel<(float[] Samples, int Rate)> Queue = Channel.CreateBounded<(float[], int)>(new BoundedChannelOptions(QueueCapacity)
         { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
@@ -31,6 +32,7 @@ public partial class MainWindow
         public ContinuousUpdate? Displayed;
         public readonly ConcurrentQueue<ContinuousReception> Completed = new();
         public readonly object HistoryLock = new(); // Solo metadatos (máximo diez); nunca audio, WPF ni esperas.
+        public ReceiverSessionDiagnostics? Diagnostics;
     }
     private sealed record ContinuousUpdate(CarrierEnergyMap Map, LiveFdmReception? Reception, long Processed, long ReceptionCount);
     private ListeningSession? continuousListening;
@@ -63,7 +65,11 @@ public partial class MainWindow
         continuousLastError = "";
         ReceiverSignalMonitor.BeginLive("Escucha continua · esperando muestras reales…");
         if (MonitorSourceComboBox.SelectedIndex == 0) DashboardSignalMonitor.BeginLive("Micrófono continuo · esperando muestras…");
-        var session = new ListeningSession { IsBfsk = IsBfskReceive }; continuousListening = session;
+        var session = new ListeningSession { IsBfsk = IsBfskReceive };
+        session.Diagnostics = new(session.IsBfsk ? "BFSK" : "FDM", "Micrófono · escucha continua", true,
+            session.IsBfsk, sessionId: session.Id);
+        continuousListening = session;
+        ShowReceiverDiagnostics(session.Diagnostics);
         continuousHistory.Clear(); continuousHistorySelected = false;
         bool hamming = UseHammingReceiveCheckBox.IsChecked == true, erasures = RecoverReceiveErasuresCheckBox.IsChecked == true;
         ContinuousStatusText.Text = $"ESCUCHA CONTINUA {(session.IsBfsk ? "BFSK" : "FDM")} · abriendo micrófono…";
@@ -76,6 +82,8 @@ public partial class MainWindow
         {
             await capture.StartContinuousAsync((samples, rate) => EnqueueContinuousSamples(session, samples, rate), session.Cancellation.Token);
             if (closing || !ReferenceEquals(continuousListening, session)) return;
+            session.Diagnostics?.Note("Micrófono activo", "Dispositivo iniciado; buscando muestras y cabeceras.");
+            ShowReceiverDiagnostics(session.Diagnostics);
             session.MicrophoneStarted = true;
             ContinuousStatusText.Text = "ESCUCHA CONTINUA ACTIVADA · MICRÓFONO ACTIVO · buscando transmisión";
         }
@@ -112,10 +120,12 @@ public partial class MainWindow
             {
                 if (session.Receiver is null)
                 {
-                    session.Receiver = session.IsBfsk ? new ContinuousBfskReceiver(block.Rate, hamming, erasures)
-                        : new ContinuousFdmReceiver(block.Rate, hamming, erasures);
+                    session.Receiver = session.IsBfsk ? new ContinuousBfskReceiver(block.Rate, hamming, erasures, session.Id)
+                        : new ContinuousFdmReceiver(block.Rate, hamming, erasures, session.Id);
                     session.Receiver.Received += entry =>
                     {
+                        session.Diagnostics?.ObserveProgress(entry.Result, entry.StartSample);
+                        session.Diagnostics?.RecordCompleted(entry.Id, entry.Result, countMissingHeaders: true);
                         lock (session.HistoryLock)
                         {
                             session.Completed.Enqueue(entry);
@@ -132,6 +142,11 @@ public partial class MainWindow
                 Interlocked.Exchange(ref session.HeaderStarts, session.Receiver.EvaluatedHeaderStarts);
                 Volatile.Write(ref session.Rate, block.Rate);
                 session.Synchronizer = session.Receiver.Current?.Result.Synchronization.Reason ?? "Buscando cabecera";
+                session.Diagnostics?.SetSamples(Interlocked.Read(ref session.InputSamples), Interlocked.Read(ref session.ConsumedSamples), block.Rate);
+                var currentResult = session.Receiver.Current?.ObservedResult;
+                long frameKey = currentResult?.Synchronization.StartSeconds is double start
+                    ? session.Receiver.BufferOrigin + (long)Math.Round(start * block.Rate) : -1;
+                session.Diagnostics?.ObserveProgress(currentResult, frameKey);
                 session.Stage = "Energía / resumen gráfico";
                 if (monitorOrigin != session.Receiver.BufferOrigin)
                 { monitor = new(block.Rate, block.Rate * 30); monitorOrigin = session.Receiver.BufferOrigin; monitorSource = new(); }
@@ -142,6 +157,7 @@ public partial class MainWindow
                 nextUi = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 5;
                 lastPublicationCount = session.Receiver.ReceptionCount;
                 var map = monitor.Snapshot(MonitorSignalOrigin.Microphone, "Micrófono continuo · tiempo local del buffer de escucha");
+                session.Diagnostics?.ObserveAcousticPeak(map.Peak);
                 map = map.WithSignal(map.Signal with { SourceId = monitorSource });
                 // Solo una instantánea pendiente: nunca esperar al Dispatcher para recibir audio.
                 Interlocked.Exchange(ref session.Latest, new(map, session.Receiver.Current,
@@ -165,6 +181,7 @@ public partial class MainWindow
         if (closing || session.Stopping || !ReferenceEquals(continuousListening, session)) return;
         var map = update.Map; var snapshot = update.Reception;
         AddContinuousHistory(entries);
+        ShowReceiverDiagnostics(session.Diagnostics);
         string last = continuousHistory.LastOrDefault()?.Label ?? "sin recepciones";
         ContinuousStatusText.Text = $"ESCUCHA CONTINUA · MICRÓFONO ACTIVO · recepciones {update.ReceptionCount} · última: {last}";
         var activity = new ReceptionActivity($"ESCUCHA CONTINUA {(session.IsBfsk ? "BFSK" : "FDM")} · buscando/recibiendo", "Micrófono (segmento gráfico local)", map.Signal.SampleRate,
@@ -295,6 +312,12 @@ public partial class MainWindow
             Interlocked.Exchange(ref session.Latest, null);
             session.Completed.Clear();
             if (session.LastError.Length == 0 && capture.Error is { } deviceError) session.LastError = deviceError;
+            session.Diagnostics?.SetSamples(session.InputSamples, session.ConsumedSamples, session.Rate);
+            if (capture.Error is { } captureError) session.Diagnostics?.DeviceError(captureError);
+            else if (session.LastError.Length > 0) session.Diagnostics?.Note("Error de escucha", session.LastError);
+            session.Diagnostics?.Stop(session.LastError.Length > 0 ? "Escucha finalizada con error."
+                : "Escucha detenida; solo recepciones finalizadas se contabilizaron.");
+            ShowReceiverDiagnostics(session.Diagnostics);
             continuousLastError = session.LastError;
             if (ReferenceEquals(continuousListening, session)) continuousListening = null;
             if (session.LastError.Length > 0) ContinuousStatusText.Text = $"Escucha finalizada con error: {session.LastError} Puede reintentar.";

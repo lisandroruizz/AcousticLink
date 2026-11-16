@@ -1,0 +1,25 @@
+# Diagnóstico de recepción por sesión
+
+## Uso y origen de los datos
+
+**Receptor → Sesión** muestra el estado acumulado y la cronología. La captura manual crea una sesión de micrófono; si se activó **Decodificar durante la captura**, sus resultados parciales alimentan el diagnóstico. Sin esa opción, la sesión solo muestra muestras y amplitud observada hasta que se ejecute un análisis posterior. **Recibir mensajes** sobre una captura finalizada o un WAV abre una sesión de **análisis posterior** distinta: sus marcas temporales son relativas al procesamiento, no al momento en que se grabó o transmitió la señal.
+
+La escucha continua mantiene una sesión desde que se inicia hasta que se detiene. El contador de recepciones usa el identificador monotónico que emite `ContinuousFdmReceiver` o `ContinuousBfskReceiver`; dos transmisiones de «Hola» con identificadores distintos cuentan dos veces. El historial visual conserva solo las últimas diez recepciones y la cronología solo los últimos 80 eventos; los contadores no dependen de esos límites. No se guardan muestras de audio dentro del diagnóstico.
+
+## Qué significa cada indicador
+
+- **Muestras disponibles/entregadas al lector:** contadores de la fuente y de bloques completos que el worker entregó al receptor. Si una cancelación corta un bloque, puede haberse examinado un prefijo no incluido en el segundo contador. Para un WAV se registra la longitud suministrada al análisis, no se afirma que cada muestra haya sido inspeccionada por cada algoritmo. La diferencia entre contadores no mide bits perdidos por el canal.
+- **Actividad acústica o amplitud del WAV:** el pico absoluto de amplitud digital observada alcanzó 0,005 en algún momento de la sesión. Para un WAV importado se habla de amplitud de archivo porque podría ser una señal digital generada. Es un umbral de presentación sobre muestras, no una decisión del detector ni un nivel calibrado de presión sonora. Un sonido ambiental puede activarlo.
+- **Candidata completa observada:** el sincronizador publicó su estado de cabecera candidata mientras terminaba la evaluación temporal. El contador no es exhaustivo: una candidata confirmada dentro de un mismo bloque puede no aparecer como estado intermedio. No se afirman candidatos de preámbulo parcial que el algoritmo no expone. **No confirmada** significa que el estado candidato desapareció sin cabecera validada; no equivale a una trama CRC rechazada.
+- **Cabecera validada:** el receptor confirmó preámbulo y marcador del canal. FDM puede validar A sin validar B. BFSK solo tiene A.
+- **Símbolos/Hamming:** el bloque comenzó a decodificarse o hubo palabras procesadas. Los símbolos `?` y las inversiones Hamming no prueban integridad.
+- **Transmisiones reconocidas finalizadas:** publicaciones finales con al menos una cabecera validada. Un análisis de silencio sin cabecera no suma una transmisión. **Tramas de canal evaluadas** cuenta los canales con cabecera validada dentro de esas publicaciones.
+- **Mensajes válidos:** canal en estado `Valid`, CRC verdadero y texto UTF-8 entregado. **Rechazadas** son tramas de canal con cabecera validada que no cumplen ese criterio. CRC rechazado e incompleta son subconjuntos explícitos; una espera sin cabecera no los incrementa.
+- **Fallos de sincronización:** en un resultado final, una sincronización ambigua o la falta de cabecera de un canal FDM cuando el otro sí confirmó la transmisión. Un WAV silencioso sin cabecera no prueba un intento fallido y no suma fallos. El simple estado «buscando» durante escucha continua tampoco suma fallos. En FDM el conteo es por canal.
+- **Errores de dispositivo:** errores informados por la captura. Otros errores del worker aparecen en la cronología como error de escucha, sin atribuirse al hardware.
+
+Cada evento indica tiempo transcurrido desde el inicio de esa sesión mediante un reloj monotónico. El tiempo mostrado en un análisis WAV representa el análisis posterior. El identificador corto visible en la sesión coincide con el sufijo mostrado en cada entrada del historial continuo; el identificador completo está en la ayuda contextual. El botón **Detener** conserva los resultados ya finalizados; cancelar un worker impide contar una recepción parcial como mensaje válido. La identidad de sesión y las comprobaciones de referencia del audio impiden que una publicación tardía aparezca en una sesión nueva.
+
+## Limitaciones
+
+El diagnóstico no cambia frecuencias, umbrales del módem, sincronización, trama, Hamming ni CRC. La búsqueda interna no publica todas las evaluaciones gruesas ni preámbulos parciales: el contador de inicios evaluados sigue disponible en el diagnóstico técnico de escucha continua. Un candidato completo puede no verse si su estado duró menos que el intervalo de publicación visual; los contadores y eventos de recepciones finalizadas se registran en el worker. Las cifras de audio y el reloj de interfaz no son mediciones de latencia acústica. La recepción física BFSK/FDM y la estabilidad de escucha continua entre dos equipos siguen pendientes de ensayo.

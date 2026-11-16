@@ -1,6 +1,6 @@
 # Estado de desarrollo de AcousticLink
 
-Referencia al 15-11-2026: rama `feature/bfsk-fdm-comparison`, HEAD inicial `e3043a6`, con la comparación experimental en el árbol de trabajo sin commit. El estado se basa en el código y las verificaciones de esta tarea; las auditorías anteriores no se vuelven a atribuir a esta sesión.
+Referencia al 15-11-2026: rama `feature/live-reception-diagnostics`, HEAD inicial `7f60da2`, con el diagnóstico de recepción por sesión en el árbol de trabajo sin commit. El estado se basa en el código y las verificaciones de esta tarea; las auditorías anteriores no se vuelven a atribuir a esta sesión.
 
 ## Estado funcional
 
@@ -8,10 +8,11 @@ Referencia al 15-11-2026: rama `feature/bfsk-fdm-comparison`, HEAD inicial `e304
 - Captura y reproducción mediante NAudio, importación WAV, recepción FDM manual, incremental y continua, con diagnósticos, visualizaciones de señal/decodificación y análisis experimental FDM con exportación CSV.
 - Comunicación de texto BFSK en un canal A (1200/1900 Hz) con trama compartida por canal, Hamming opcional, CRC-32, transmisión/reproducción, WAV digital, recepción manual, incremental y continua, selección de modo e inspección WPF. Detalle en `Docs/SingleChannelBfsk.md`.
 - Comparación experimental BFSK/FDM en **Análisis → Comparación**: pares sintéticos con igual contenido útil, RMS digital objetivo y ruido reproducible; análisis del audio seleccionado; métricas por canal y agregadas; historial JSON, CSV separado y espectro relativo. Ver `Docs/BfskFdmComparison.md`. La medición FDM anterior y su CSV se conservan.
+- Diagnóstico avanzado en **Receptor → Sesión**: estado de muestras, actividad acústica observada, candidatos de cabecera, validaciones, resultados por canal, contadores acumulados y cronología acotada. Funciona en captura manual, recepción incremental, escucha continua y análisis posterior WAV. Ver `Docs/LiveReceptionDiagnostics.md`.
 
 ## Verificación y asuntos abiertos
 
-- `checks/` contiene programas de verificación C# independientes con directivas .NET 10 y referencia al proyecto WPF. Se ejecutan individualmente como aplicaciones basadas en archivo; no hay proyecto de `dotnet test`. Para la comparación se agregó `VerifyComparisonExperiment.cs`; se ejecutaron además `VerifyFdmExperimentMetrics.cs`, `VerifyBfskTextModem.cs` y `VerifyBfskWorkspace.cs`, y se compiló la solución. Los checks fueron aprobados; la consulta de avisos NuGet emitió `NU1900` por red restringida. Los resultados previos de `ContinuousFdmListeningAudit.md` no sustituyen nuevas corridas tras cambios funcionales.
+- `checks/` contiene programas de verificación C# independientes con directivas .NET 10 y referencia al proyecto WPF. Se ejecutan individualmente como aplicaciones basadas en archivo; no hay proyecto de `dotnet test`. La comparación anterior agregó `VerifyComparisonExperiment.cs`. Esta tarea agregó y aprobó `VerifyReceiverSessionDiagnostics.cs`; aprobaron además `VerifyContinuousFdm.cs`, `VerifyIncrementalFdmReception.cs`, `VerifyBfskTextModem.cs`, `VerifyContinuousProgress.cs`, `VerifyContinuousWorkspace.cs`, `VerifyManualCaptureWorkflow.cs` y `VerifyReceptionPresentation.cs`. La solución compiló sin errores ni advertencias con salida aislada; la salida predeterminada quedó bloqueada por una instancia abierta de AcousticLink. Los checks emitieron `NU1900` al no poder consultar avisos de NuGet por la red restringida. Los resultados previos de `ContinuousFdmListeningAudit.md` no sustituyen nuevas corridas tras cambios funcionales.
 - No se identificó en esta revisión documental un defecto funcional actual confirmado. La auditoría de escucha continua no pudo determinar la causa exacta del incidente acústico original de 5,58 s por falta de muestras/telemetría de ese ensayo.
 - Sigue pendiente validar con transmisión acústica física entre equipos la recepción de mensajes BFSK/FDM y ejecutar una campaña comparativa física. Las pruebas sintéticas, de WAV y de captura ambiental no demuestran esa transmisión.
 

@@ -70,6 +70,7 @@ public partial class MainWindow
                 || !ReferenceEquals(audioSelection.Current?.Audio, session.Audio) || snapshot is null) return;
             bool changed = session.Snapshot?.Result != snapshot.Result;
             session.Snapshot = snapshot; session.Finished = final;
+            ObserveManualReception(session.Audio, snapshot, final);
             LiveReceptionStatusText.Text = IsBfskReceive
                 ? $"{(final ? "Finalizada" : "Recepción en vivo")} · BFSK: {snapshot.ChannelAStatus}"
                 : $"{(final ? "Finalizada" : "Recepción en vivo")} · A: {snapshot.ChannelAStatus} · B: {snapshot.ChannelBStatus}";
@@ -84,6 +85,7 @@ public partial class MainWindow
             if (!closing && ReferenceEquals(liveReception, session))
             {
                 session.Finished = true; LiveReceptionStatusText.Text = $"Recepción detenida por error: {ex.Message}";
+                manualDiagnostics?.Note("Decodificación detenida", ex.Message);
                 RefreshReceptionActivity();
                 CancelReceiveFdmTextButton.IsEnabled = false;
             }
@@ -95,6 +97,7 @@ public partial class MainWindow
     {
         if (liveReception is not { Finished: false } session) return;
         session.Cancellation.Cancel(); session.Finished = true;
+        manualDiagnostics?.Note("Decodificación cancelada", "El micrófono puede continuar capturando; no se publica una trama parcial como válida.");
         LiveReceptionStatusText.Text = capture.IsRecording ? "Decodificación cancelada · el micrófono sigue capturando." : "Decodificación cancelada.";
         if (session.Snapshot is { } snapshot)
         {

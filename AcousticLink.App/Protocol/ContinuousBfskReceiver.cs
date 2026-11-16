@@ -5,7 +5,7 @@ namespace AcousticLink.App.Protocol;
 // El micrófono permanece abierto; se rearma solamente el lector de una trama.
 public sealed class ContinuousBfskReceiver : IContinuousTextReceiver
 {
-    public Guid SessionId { get; } = Guid.NewGuid();
+    public Guid SessionId { get; }
     private readonly int rate;
     private readonly bool hamming, erasures;
     private readonly float[] buffer;
@@ -27,8 +27,10 @@ public sealed class ContinuousBfskReceiver : IContinuousTextReceiver
         ? new(BfskPresentation.AsSingleChannel(current.Result), current.SampleCount, current.IsFinal,
             current.Result.Channel.Reason, "Sin canal B") : null;
 
-    public ContinuousBfskReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false)
+    public ContinuousBfskReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false,
+        Guid? sessionId = null)
     {
+        SessionId = sessionId ?? Guid.NewGuid();
         if (sampleRate <= 2 * BfskToneGenerator.Bit1Frequency) throw new ArgumentOutOfRangeException(nameof(sampleRate));
         rate = sampleRate; hamming = useHamming; erasures = useHamming && recoverErasures;
         buffer = new float[checked(rate * 30)]; reader = NewReader();

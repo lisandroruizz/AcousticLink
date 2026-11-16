@@ -223,6 +223,7 @@
 
     </Grid></Expander></StackPanel></ScrollViewer></TabItem>
    <TabItem Header="Explorador de trama"><visual:FrameExplorerView x:Name="ReceivedFrameExplorer" FitWorkspace="True"/></TabItem><TabItem Header="Monitor de recepción"><visual:SignalMonitorView x:Name="ReceiverSignalMonitor" ReceiverMode="True"/></TabItem>
+   <TabItem Header="Sesión"><visual:ReceiverSessionDiagnosticsView x:Name="ReceiverSessionDiagnosticsView"/></TabItem>
   </TabControl>
   <GridSplitter x:Name="ReceiverInspectorSplitter" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LineBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Focusable="True"/>
   <Border x:Name="ReceiverInspector" Grid.Column="2" Background="#101B2B" Padding="10,4"><TabControl x:Name="ReceiverInspectorTabs" ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">

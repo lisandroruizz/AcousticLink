@@ -8,8 +8,8 @@ public sealed record ContinuousReception(long Id, long StartSample, DateTimeOffs
     public Guid SessionId { get; init; }
     public bool IsBfsk { get; init; }
     public string Label => IsBfsk
-        ? $"#{Id} · BFSK · {DetectedAt:HH:mm:ss} · {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()}"
-        : $"#{Id} · FDM · {DetectedAt:HH:mm:ss} · A: {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()} · B: {Result.ChannelB.Text ?? Result.ChannelB.State.ToString()}";
+        ? $"#{Id} · BFSK · {DetectedAt:HH:mm:ss} · {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()} · sesión {SessionId.ToString("N")[..8]}"
+        : $"#{Id} · FDM · {DetectedAt:HH:mm:ss} · A: {Result.ChannelA.Text ?? Result.ChannelA.State.ToString()} · B: {Result.ChannelB.Text ?? Result.ChannelB.State.ToString()} · sesión {SessionId.ToString("N")[..8]}";
 }
 
 public interface IContinuousTextReceiver
@@ -29,7 +29,7 @@ public interface IContinuousTextReceiver
 public sealed class ContinuousFdmReceiver : IContinuousTextReceiver
 {
     public const int HistoryLimit = 10;
-    public Guid SessionId { get; } = Guid.NewGuid();
+    public Guid SessionId { get; }
     private bool completed;
     private readonly int rate;
     private readonly bool hamming, erasures;
@@ -51,8 +51,10 @@ public sealed class ContinuousFdmReceiver : IContinuousTextReceiver
     public int Capacity => buffer.Length;
     public long EvaluatedHeaderStarts => previousHeaderStarts + reader.EvaluatedHeaderStarts + (nextHeader?.EvaluatedStarts ?? 0);
     public event Action<ContinuousReception>? Received;
-    public ContinuousFdmReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false)
+    public ContinuousFdmReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false,
+        Guid? sessionId = null)
     {
+        SessionId = sessionId ?? Guid.NewGuid();
         rate = sampleRate; hamming = useHamming; erasures = useHamming && recoverErasures;
         reader = NewReader(); buffer = new float[checked(rate * 30)];
     }

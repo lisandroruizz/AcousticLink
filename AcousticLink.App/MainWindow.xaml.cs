@@ -380,6 +380,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 audioSelection.SelectMicrophone(started, capture.FormatDescription);
                 InvalidateAudioAnalysis();
                 ExperimentProfileComboBox.SelectedIndex = 0;
+                StartManualDiagnostics(started, decodeDuringCapture);
                 if (decodeDuringCapture) StartLiveReception(started);
             }
         }
@@ -410,6 +411,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         continuousHistorySelected = false;
         ContinuousHistoryComboBox.SelectedIndex = -1;
         StopLiveReception();
+        manualDiagnostics = null; manualDiagnosticsAudio = null;
+        ShowReceiverDiagnostics(null);
         presentedReception = null; presentedReceptionSource = null; presentedReceptionSamples = 0;
         LiveReceptionInspector.Clear(); ReceiverSignalMonitor.ClearReceptionActivity();
         InvalidateObservedMonitor();
@@ -524,6 +527,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         wasCaptureRecording = capture.IsRecording;
         if (continuousListening is null && !continuousHistorySelected && !continuousSegmentRetained) RefreshReceptionActivity();
         else if (continuousListening is not null) RefreshContinuousControls();
+        RefreshManualDiagnostics();
         if (continuousHistorySelected)
         {
             DisableManualAudioTools();
@@ -871,6 +875,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var recording = audioSelection.Current?.Audio;
         if (recording is null || capture.IsRecording || captureBusy || analyzing) return;
         StopLiveReception();
+        var diagnostics = StartHistoricalDiagnostics(recording);
         analyzing = true;
         RefreshCapture();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
@@ -890,9 +895,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             var result = await Task.Run(() => new FdmTextReceiver().Receive(recording.GetSamples(), recording.SampleRate, cancellation.Token, useHamming, recoverErasures), cancellation.Token);
             if (closing) return;
             ShowFdmReception(result, recording);
+            FinishHistoricalDiagnostics(diagnostics, recording, result);
         }
-        catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; }
-        catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; }
+        catch (OperationCanceledException) { if (!closing) ReceivedFdmText.Text = "Recepción cancelada."; diagnostics.Stop("Análisis posterior cancelado."); ShowReceiverDiagnostics(diagnostics); }
+        catch (Exception ex) { if (!closing) ReceivedFdmText.Text = $"No se pudo recibir: {ex.Message}"; diagnostics.Stop("Análisis posterior detenido por error: " + ex.Message); ShowReceiverDiagnostics(diagnostics); }
         finally
         {
             textReceiveCancellation = null;
