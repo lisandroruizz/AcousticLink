@@ -23,6 +23,11 @@ var thread = new Thread(() =>
         // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
         ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
         window.Show();
+        var initialSections = (TabControl)window.FindName("MainSectionsTabs");
+        initialSections.SelectedIndex = 2; Pump();
+        Require(((TabControl)window.FindName("ReceiverTools")).SelectedIndex == 2, "La señal abre como espacio principal del Receptor");
+        Require(((TabControl)window.FindName("ReceiverInspectorTabs")).SelectedIndex == 1, "El inspector abre en el detalle técnico");
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "estudio-inicial-1366.png"));
         const System.Reflection.BindingFlags privateInstance = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
         var emittingField = typeof(MainWindow).GetField("calibrationEmitting", privateInstance)!;
         var playingField = typeof(MainWindow).GetField("playing", privateInstance)!;
@@ -84,6 +89,10 @@ var thread = new Thread(() =>
         ((TextBlock)window.FindName("GeneralStateText")).Text = "Comprobación sintética";
         ((TextBlock)window.FindName("AnalysisConfigurationWarning")).Text = "Ensayo sintético · resultados reales del analizador · no captura física";
         tabs.SelectedIndex = 2; Pump();
+        ((TextBlock)window.FindName("ReceivedFdmText")).Text = "Ensayo sintético de interfaz · resultado A/B válido por CRC; no captura acústica física.";
+        var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");
+        var recorded = CarrierEnergyMap.Analyze(new(samples, 48000, MonitorSignalOrigin.ImportedWav, "WAV sintético de interfaz"));
+        monitor.Show(recorded); monitor.SetReception(received, recorded.Signal.Duration);
         var receiverTools = (TabControl)window.FindName("ReceiverTools");
         Require(((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).FitWorkspace && receiverTools.Items.Count == 4, "Explorador utiliza la altura del workspace");
         var toggle = (System.Windows.Controls.Primitives.ToggleButton)window.FindName("ReceiverInspectorToggle");
@@ -105,9 +114,29 @@ var thread = new Thread(() =>
         window.Width = 1366; window.Height = 768; Pump();
         {
             receiverTools.SelectedIndex = 2; Pump();
-            var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");
-            var recorded = CarrierEnergyMap.Analyze(new(samples, 48000, MonitorSignalOrigin.ImportedWav, "WAV sintético de interfaz"));
-            monitor.Show(recorded); monitor.SetReception(received, recorded.Signal.Duration); monitor.SetCursor(3.25);
+            monitor.SetReception(received, recorded.Signal.Duration); monitor.SetCursor(3.25);
+            if (args.Length > 0)
+            {
+                Snapshot(window, System.IO.Path.Combine(args[0], "estudio-fdm-1366.png"));
+                window.Width = 1180; window.Height = 740; Pump();
+                Require(((Border)window.FindName("ReceiverInspector")).IsVisible, "Inspector junto a la señal a 1180 × 740");
+                Snapshot(window, System.IO.Path.Combine(args[0], "estudio-fdm-1180.png"));
+                window.Width = 820; window.Height = 600; Pump();
+                var inspectorButton = (System.Windows.Controls.Primitives.ToggleButton)window.FindName("ReceiverInspectorToggle");
+                double buttonRight = inspectorButton.TranslatePoint(new Point(inspectorButton.ActualWidth, 0), window).X;
+                Require(inspectorButton.IsVisible && buttonRight <= window.ActualWidth && !((Border)window.FindName("ReceiverInspector")).IsVisible,
+                    "Inspector accesible desde la barra compacta a 820 × 600");
+                var mapToggle = (Expander)typeof(SignalMonitorView).GetField("overviewDetails", privateInstance)!.GetValue(monitor)!;
+                Require(mapToggle.IsVisible && !mapToggle.IsExpanded, "Mapa temporal y CRC disponibles en vista compacta");
+                mapToggle.IsExpanded = true; Pump();
+                Require(((FrameworkElement)mapToggle.Content).ActualHeight > 0, "Mapa temporal se puede abrir a 820 × 600");
+                mapToggle.IsExpanded = false; Pump();
+                Snapshot(window, System.IO.Path.Combine(args[0], "estudio-fdm-820.png"));
+                window.Width = 1366 / 1.25; window.Height = 768 / 1.25; Pump();
+                Snapshot(window, System.IO.Path.Combine(args[0], "estudio-fdm-logico125.png"));
+                window.Width = 1366; window.Height = 768; Pump();
+                Require(((Border)window.FindName("ReceiverInspector")).IsVisible, "Inspector restaurado tras ampliar la ventana");
+            }
             var monitorTools = (TabControl)typeof(SignalMonitorView).GetField("signalTools", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(monitor)!;
             monitorTools.SelectedIndex = 0; monitor.Zoom(3.2, 3.5); monitor.SelectInterval(3.2, 3.3); monitor.SetCursor(3.25); Pump();
             if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-simbolos.png"));

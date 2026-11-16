@@ -37,6 +37,12 @@ var thread = new Thread(() =>
         type.GetField("MicrophoneStarted")!.SetValue(session, true);
         ((DispatcherTimer)Field("captureTimer")).Start(); // El timer consume la última instantánea, sin bloquear el worker.
         Call("RefreshCapture");
+        if (args.Length > 0)
+        {
+            w.Width = 1366; w.Height = 768;
+            ((TabControl)w.FindName("MainSectionsTabs")).SelectedIndex = 2; Pump(Task.Delay(50));
+            Snapshot(w, System.IO.Path.Combine(args[0], "estudio-escucha-sintetica.png"));
+        }
         Require(!((Button)w.FindName("StartCaptureButton")).IsEnabled && !((Button)w.FindName("LoadWavButton")).IsEnabled, "Conflicto de micrófono bloqueado explícitamente");
         Call("StartCapture_Click", w, new RoutedEventArgs());
         Require(((TextBlock)w.FindName("CaptureStatusText")).Text.Contains("escucha continua"), "No abrir segundo recorder");
@@ -55,6 +61,7 @@ var thread = new Thread(() =>
         Feed("Hola", "Mundo"); Wait(() => history.Count == 1);
         var monitor = (SignalMonitorView)w.FindName("ReceiverSignalMonitor");
         ((ComboBox)w.FindName("ContinuousHistoryComboBox")).SelectedIndex = 0; Wait(() => ReferenceEquals(monitor.Data?.Signal.SourceId, history[0]));
+        if (args.Length > 0) Snapshot(w, System.IO.Path.Combine(args[0], "estudio-historico-sintetico.png"));
         var selected = monitor.Data;
         ((TabControl)w.FindName("MainSectionsTabs")).SelectedIndex = 1;
         Feed("Prueba", "Datos"); Wait(() => history.Count == 2);
@@ -76,6 +83,12 @@ var thread = new Thread(() =>
         Wait(() => typeof(MainWindow).GetField("continuousListening", f)!.GetValue(w) is null);
         Require(deviceWorker.IsCompleted && ((TextBlock)w.FindName("ContinuousStatusText")).Text.Contains("Desconexión simulada")
             && ((Button)w.FindName("ContinuousListenButton")).IsEnabled, "Error visible, sin worker retenido y reintento habilitado");
+        if (args.Length > 0)
+        {
+            ((TabControl)w.FindName("MainSectionsTabs")).SelectedIndex = 2;
+            ((TabControl)w.FindName("ReceiverInspectorTabs")).SelectedIndex = 0; Pump(Task.Delay(50));
+            Snapshot(w, System.IO.Path.Combine(args[0], "estudio-error-dispositivo-simulado.png"));
+        }
         typeof(AudioCaptureService).GetField("error", f)!.SetValue(capture, null);
         // Reiniciar una sesión y cerrar mientras otra petición de parada sigue pendiente.
         var restarted = Activator.CreateInstance(type, true)!;
@@ -99,3 +112,12 @@ Console.WriteLine("WPF continuo sintético: tres transmisiones, histórico, pest
 static void Wait(Func<bool> check) { var end = DateTime.UtcNow.AddSeconds(15); while (!check() && DateTime.UtcNow < end) Pump(Task.Delay(10)); if (!check()) throw new TimeoutException(); }
 static void Pump(Task task) { var end = DateTime.UtcNow.AddSeconds(15); while (!task.IsCompleted && DateTime.UtcNow < end) { var frame = new DispatcherFrame(); Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false)); Dispatcher.PushFrame(frame); Thread.Sleep(1); } if (!task.IsCompleted) throw new TimeoutException(); task.GetAwaiter().GetResult(); }
 static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
+static void Snapshot(Window window, string path)
+{
+    window.UpdateLayout();
+    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+    bitmap.Render(window);
+    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+    using var file = System.IO.File.Create(path); encoder.Save(file);
+}

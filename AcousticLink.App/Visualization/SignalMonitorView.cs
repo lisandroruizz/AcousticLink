@@ -35,8 +35,24 @@ public sealed class SignalMonitorView : UserControl
     private readonly Button labFollow = new() { Content = "Pausar seguimiento / volver al vivo", Padding = new Thickness(8, 3, 8, 3), FontSize = 12 };
     private readonly ReceptionProgressView receptionProgress = new() { Compact = true, Visibility = Visibility.Collapsed };
     public ReceptionActivity? ReceptionActivity => receptionProgress.Activity;
-    public void SetReceptionActivity(ReceptionActivity activity) { receptionProgress.Show(activity); receptionProgress.Visibility = ReceiverMode && signalTools.SelectedIndex != 2 ? Visibility.Visible : Visibility.Collapsed; }
+    public void SetReceptionActivity(ReceptionActivity activity) { receptionProgress.Show(activity); UpdateReceptionProgressVisibility(); }
     public void ClearReceptionActivity() { receptionProgress.Clear(); receptionProgress.Visibility = Visibility.Collapsed; }
+    private void UpdateReceptionProgressVisibility() => receptionProgress.Visibility = ReceiverMode &&
+        signalTools.SelectedIndex != 2 && receptionProgress.Activity is not null && ActualWidth >= 700 && ActualHeight >= 400
+            ? Visibility.Visible : Visibility.Collapsed;
+    private void UpdateAuxiliaryVisibility()
+    {
+        bool compact = ReceiverMode && ActualHeight < 380;
+        bool interpretationSelected = ReceiverMode && signalTools.SelectedIndex == 2;
+        if (compact != compactOverview)
+        {
+            overviewDetails.IsExpanded = !compact;
+            compactOverview = compact;
+        }
+        overviewDetails.Visibility = interpretationSelected ? Visibility.Collapsed : Visibility.Visible;
+        footer.Visibility = compact || interpretationSelected ? Visibility.Collapsed : Visibility.Visible;
+        UpdateReceptionProgressVisibility();
+    }
     private readonly TextBlock settings = Label("");
     private readonly TextBlock cursorInfo = Label("");
     private readonly TextBlock energies = Label("");
@@ -53,12 +69,17 @@ public sealed class SignalMonitorView : UserControl
     public void ReportObservationFailure(string message) { decisions.Text = "Error de observación: " + message; }
     private readonly ReceiverFrameStrip receptionStrip = new();
     private readonly StackPanel overviewPane = new();
+    private readonly Expander overviewDetails = new() { Header = "Mapa temporal y CRC", IsExpanded = true, Margin = new Thickness(0) };
+    private bool compactOverview;
     private readonly StackPanel footer = new() { Margin = new Thickness(0, 6, 0, 0) };
+    private readonly StackPanel secondaryDetails = new();
     private bool receiverMode;
     public bool ReceiverMode
     {
         get => receiverMode;
-        set { receiverMode = value; ((TabItem)signalTools.Items[1]).Visibility = value ? Visibility.Collapsed : Visibility.Visible; contribution.Visibility = value ? Visibility.Collapsed : Visibility.Visible; ((TabItem)signalTools.Items[2]).Visibility = value ? Visibility.Visible : Visibility.Collapsed; if (value) { source.TextWrapping = TextWrapping.NoWrap; source.TextTrimming = TextTrimming.CharacterEllipsis;
+        set { if (receiverMode == value) return; receiverMode = value; ((TabItem)signalTools.Items[1]).Visibility = value ? Visibility.Collapsed : Visibility.Visible; contribution.Visibility = value ? Visibility.Collapsed : Visibility.Visible; ((TabItem)signalTools.Items[2]).Visibility = value ? Visibility.Visible : Visibility.Collapsed; if (value) { source.TextWrapping = TextWrapping.NoWrap; source.TextTrimming = TextTrimming.CharacterEllipsis;
+            footer.Children.Remove(decisions); footer.Children.Remove(energyValues);
+            secondaryDetails.Children.Insert(0, energyValues); secondaryDetails.Children.Insert(0, decisions);
             from.Width = to.Width = 65; scale.Width = 165;
             foreach (var button in ((Grid)Content).Children.OfType<WrapPanel>().SelectMany(p => p.Children.OfType<Button>()))
             {
@@ -66,6 +87,10 @@ public sealed class SignalMonitorView : UserControl
                 button.ToolTip = text;
                 button.Content = text switch { "Aplicar vista" => "Aplicar", "Ampliar selección" => "Selección", "Recorrer análisis (sin audio)" => "Recorrer WAV", "Ver completa" => "Completa", _ => button.Content };
             }
+        } else {
+            secondaryDetails.Children.Remove(decisions); secondaryDetails.Children.Remove(energyValues);
+            footer.Children.Insert(0, decisions); footer.Children.Insert(1, energyValues);
+            source.TextWrapping = TextWrapping.Wrap; source.TextTrimming = TextTrimming.None;
         } }
     }
     private readonly TextBlock decisions = Label("A: ? · B: ? · ventana sin evaluar");
@@ -164,6 +189,7 @@ public sealed class SignalMonitorView : UserControl
     public SignalMonitorView()
     {
         var root = new Grid { Margin = new Thickness(4) };
+        SizeChanged += (_, _) => UpdateAuxiliaryVisibility();
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1.2, GridUnitType.Star), new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
             root.RowDefinitions.Add(new RowDefinition { Height = height });
         root.Children.Add(source);
@@ -221,14 +247,13 @@ public sealed class SignalMonitorView : UserControl
         signalTools.Items.Add(new TabItem { Header = "Cómo la interpreta", Content = interpretation });
         Grid.SetRow(signalTools, 3); Grid.SetRowSpan(signalTools, 2); root.Children.Add(signalTools);
         formation.TimeSelected += time => { SuspendFollowing(); SetCursor(time); if (time < start || time >= end) CenterAt(time); };
-        signalTools.SelectionChanged += (_, e) => { if (!ReferenceEquals(e.OriginalSource, signalTools)) return; bool lab = receiverMode && signalTools.SelectedIndex == 2; receptionProgress.Visibility = receiverMode && !lab && receptionProgress.Activity is not null ? Visibility.Visible : Visibility.Collapsed; toolsScroller.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; overviewPane.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; labToolbar.Visibility = lab ? Visibility.Visible : Visibility.Collapsed; footer.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; cursorInfo.Visibility = settings.Visibility = signalTools.SelectedIndex != 0 ? Visibility.Collapsed : Visibility.Visible;  if (signalTools.SelectedIndex == 1 && map?.Signal.Origin == MonitorSignalOrigin.Generated) { if (live && FollowingCapture) ApplyFollow(); else SetWindowDuration(.01); } formation.Update(map, start, end, cursor); };
-        navigator = new OverviewNavigator(this) { Height = 36, Margin = new Thickness(0, 3, 0, 0) }; overviewPane.Children.Add(navigator); overviewPane.Children.Add(receptionStrip); Grid.SetRow(overviewPane, 5); root.Children.Add(overviewPane);
+        signalTools.SelectionChanged += (_, e) => { if (!ReferenceEquals(e.OriginalSource, signalTools)) return; bool lab = receiverMode && signalTools.SelectedIndex == 2; toolsScroller.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; UpdateAuxiliaryVisibility(); labToolbar.Visibility = lab ? Visibility.Visible : Visibility.Collapsed; cursorInfo.Visibility = settings.Visibility = signalTools.SelectedIndex != 0 ? Visibility.Collapsed : Visibility.Visible;  if (signalTools.SelectedIndex == 1 && map?.Signal.Origin == MonitorSignalOrigin.Generated) { if (live && FollowingCapture) ApplyFollow(); else SetWindowDuration(.01); } formation.Update(map, start, end, cursor); };
+        navigator = new OverviewNavigator(this) { Height = 36, Margin = new Thickness(0, 3, 0, 0) }; overviewPane.Children.Add(navigator); overviewPane.Children.Add(receptionStrip); overviewDetails.Content = overviewPane; Grid.SetRow(overviewDetails, 5); root.Children.Add(overviewDetails);
 
         footer.Children.Add(Label("Izq: seleccionar · central / Mayús+arrastre: desplazar · Ctrl+rueda: zoom · Mayús+rueda: desplazar · doble clic: centrar")); footer.Children.Add(mode); footer.Children.Add(decisions); footer.Children.Add(cursorInfo); footer.Children.Add(energyValues); footer.Children.Add(settings); footer.Children.Add(Label("FDM: dos señales BFSK simultáneas en bandas distintas. Brillo = energía estimada; no confirma un bit válido."));
-        var secondaryDetails = new StackPanel();
         foreach (var child in footer.Children.Cast<UIElement>().ToArray()) { footer.Children.Remove(child); if (!ReferenceEquals(child, decisions) && !ReferenceEquals(child, energyValues)) secondaryDetails.Children.Add(child); }
         footer.Children.Add(decisions); footer.Children.Add(energyValues);
-        footer.Children.Add(new Expander { Header = "Detalles de observación", Content = secondaryDetails, IsExpanded = false });
+        footer.Children.Add(new Expander { Header = "Decisiones y mediciones", Content = secondaryDetails, IsExpanded = false });
         Grid.SetRow(footer, 6); root.Children.Add(footer); Content = root;
         ((TabItem)signalTools.Items[2]).Visibility = receiverMode ? Visibility.Visible : Visibility.Collapsed;
         interpretation.TimeSelected += time => { SuspendFollowing(); SetCursor(time); if (interpretation.Selection?.Trace is { } trace && map is not null) SelectInterval(trace.Symbol.StartSample / (double)map.Signal.SampleRate, trace.Symbol.EndSample / (double)map.Signal.SampleRate); if (time < start || time >= end) CenterAt(time); };
