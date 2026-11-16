@@ -30,9 +30,8 @@ var thread = new Thread(() =>
             Find<StackPanel>("FdmProfilePanel").Visibility == Visibility.Collapsed &&
             Find<TextBlock>("FdmTextInfoText").Text.Contains("sin relleno ni canal B") &&
             Find<TextBlock>("TransmitDurationText").Text.Contains("s de transmisión"), "Emisor BFSK de un canal");
-        var dashboard = (StackPanel)Find<ScrollViewer>("DashboardOperationScroll").Content;
-        Require(dashboard.Children.OfType<ComboBox>().Single().SelectedIndex == 0 &&
-            dashboard.Children.OfType<Grid>().First().Children.OfType<Border>().Last().Visibility == Visibility.Collapsed,
+        Require(Find<ComboBox>("DashboardModeComboBox").SelectedIndex == 0 &&
+            Find<Grid>("DashboardTransmitGrid").Children.OfType<Border>().Last().Visibility == Visibility.Collapsed,
             "Panel general refleja BFSK");
         receive.SelectedIndex = 0; Pump();
         Require(Find<StackPanel>("ReceptionChannelBPanel").Visibility == Visibility.Collapsed &&

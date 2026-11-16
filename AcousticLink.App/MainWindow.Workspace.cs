@@ -8,6 +8,43 @@ namespace AcousticLink.App;
 
 public partial class MainWindow
 {
+    private void DashboardLayout_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateDashboardLayout();
+
+    private void UpdateDashboardLayout()
+    {
+        if (DashboardTransmitGrid is null || DashboardSecondaryGrid is null || DashboardReceptionGrid is null ||
+            TransmitChannelBPanel is null || ReceptionChannelBPanel is null) return;
+        ArrangeDashboardPair(DashboardTransmitGrid, DashboardTransmitACard, DashboardTransmitGrid.Children.OfType<Border>().Last(),
+            DashboardTransmitGrid.ActualWidth < 640, TransmitChannelBPanel.Visibility == Visibility.Collapsed);
+        ArrangeDashboardPair(DashboardSecondaryGrid, DashboardConfiguration, DashboardSignalCard,
+            DashboardSecondaryGrid.ActualWidth < 640, false);
+        ArrangeDashboardPair(DashboardReceptionGrid, DashboardReceptionACard, DashboardReceptionBCard,
+            DashboardReceptionGrid.ActualWidth < 390, ReceptionChannelBPanel.Visibility == Visibility.Collapsed);
+    }
+
+    private static void ArrangeDashboardPair(Grid grid, Border first, Border second, bool stacked, bool single)
+    {
+        grid.ColumnDefinitions[1].Width = new GridLength(stacked || single ? 0 : 16);
+        Grid.SetColumnSpan(first, stacked || single ? 3 : 1);
+        Grid.SetColumn(second, stacked ? 0 : 2);
+        Grid.SetColumnSpan(second, stacked ? 3 : 1);
+        Grid.SetRow(second, stacked ? 1 : 0);
+    }
+
+    private void TechnicalLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Grid grid) return;
+        bool stacked = e.NewSize.Width < 660;
+        grid.ColumnDefinitions[1].Width = new GridLength(stacked ? 0 : 12);
+        var second = (Border)grid.Children[1];
+        var action = (Border)grid.Children[2];
+        Grid.SetColumnSpan((Border)grid.Children[0], stacked ? 3 : 1);
+        Grid.SetColumn(second, stacked ? 0 : 2);
+        Grid.SetColumnSpan(second, stacked ? 3 : 1);
+        Grid.SetRow(second, stacked ? 1 : 0);
+        Grid.SetRow(action, stacked ? 2 : 1);
+    }
+
     private double receiverInspectorWidth = 280, analysisSettingsWidth = 240;
     private bool receiverNarrow;
     private void ReceiverWorkspace_SizeChanged(object sender, SizeChangedEventArgs e)
