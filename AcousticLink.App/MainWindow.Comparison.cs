@@ -14,6 +14,28 @@ public partial class MainWindow
     private readonly List<ComparisonTrial> comparisonHistory = [];
     private CancellationTokenSource? comparisonCancellation;
 
+    private void AnalysisSummary_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool stacked = AnalysisSummaryWorkspace.ActualWidth < 790;
+        AnalysisSummaryWorkspace.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Grid.SetColumn(AnalysisChannelBCard, stacked ? 0 : 1);
+        Grid.SetRow(AnalysisChannelBCard, stacked ? 1 : 0);
+        AnalysisChannelACard.Margin = stacked ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 5, 8);
+        AnalysisChannelBCard.Margin = stacked ? new Thickness(0, 0, 0, 8) : new Thickness(5, 0, 0, 8);
+    }
+
+    private void ComparisonWorkspace_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool stacked = ComparisonWorkspace.ActualWidth < 920;
+        ComparisonWorkspace.ColumnDefinitions[0].Width = stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(300);
+        ComparisonWorkspace.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        ComparisonWorkspace.RowDefinitions[0].Height = stacked ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+        ComparisonWorkspace.RowDefinitions[1].Height = stacked ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        ComparisonSettingsScroll.MaxHeight = stacked ? 165 : double.PositiveInfinity;
+        Grid.SetColumn(ComparisonResultsScroll, stacked ? 0 : 1);
+        Grid.SetRow(ComparisonResultsScroll, stacked ? 1 : 0);
+    }
+
     private void InitializeComparison()
     {
         ComparisonProfileCombo.ItemsSource = FdmAmplitudeProfiles.All;
@@ -154,7 +176,7 @@ public partial class MainWindow
         var selected = ComparisonHistoryList.SelectedItems.Cast<ComparisonTrial>().ToArray();
         ComparisonCharts.Children.Clear(); ComparisonSpectrumCharts.Children.Clear();
         if (selected.Length == 0)
-        { ComparisonSummaryText.Text = "Sin selección."; ComparisonCompatibilityText.Text = "Seleccioná uno o dos ensayos."; return; }
+        { ComparisonSummaryText.Text = "Sin selección."; ComparisonDetailsText.Text = "Seleccioná un ensayo para consultar el detalle."; ComparisonCompatibilityText.Text = "Seleccioná uno o dos ensayos."; return; }
         ComparisonCompatibilityText.Text = selected.Length == 2 ? ComparisonRules.Compatibility(selected[0], selected[1])
             : selected.Length > 2 ? "Selección múltiple: tendencias descriptivas; no se acredita equivalencia entre todos los ensayos."
             : "Ensayo individual; seleccioná su par para comparar.";
@@ -162,17 +184,18 @@ public partial class MainWindow
         ComparisonSummaryText.Text = string.Join("\n", groups.Select(group =>
         {
             var s = ComparisonSummary.From(group);
-            return $"{group.Key}: n={s.Count} ensayos · {s.ValidFrames}/" +
-                (s.ExpectedFrames > 0 ? s.ExpectedFrames.ToString() : "No disponible") + " mensajes válidos / esperados · " +
-                $"{s.DetectedFrames} cabeceras detectadas · {s.CrcRejectedFrames} CRC rechazados · {s.TruncatedFrames} truncadas · " +
-                $"duración media {(s.MeanDurationSeconds.HasValue ? $"{s.MeanDurationSeconds:0.###} s" : "No disponible")} · " +
+            return $"{group.Key} · n={s.Count} ensayos · {s.ValidFrames}/" +
+                (s.ExpectedFrames > 0 ? s.ExpectedFrames.ToString() : "No disponible") + " mensajes válidos / esperados\n" +
+                $"{s.DetectedFrames} cabeceras detectadas · {s.CrcRejectedFrames} CRC rechazados · {s.TruncatedFrames} truncadas\n" +
+                $"Duración digital media {(s.MeanDurationSeconds.HasValue ? $"{s.MeanDurationSeconds:0.###} s" : "No disponible")} · " +
                 $"rendimiento medio {(s.MeanEffectiveBitsPerSecond.HasValue ? $"{s.MeanEffectiveBitsPerSecond:0.###} bit/s" : "No disponible")} · " +
                 $"BER agregada {(s.AggregateBerBefore.HasValue ? s.AggregateBerBefore.Value.ToString("0.#####") : "No disponible")}.";
-        })) + "\n" + string.Join("\n", selected.SelectMany(t => t.Channels.Select(c =>
+        }));
+        ComparisonDetailsText.Text = string.Join("\n", selected.SelectMany(t => t.Channels.Select(c =>
             $"{t.Id} · {c.Channel}: {c.State}, CRC {(c.CrcValid is true ? "válido" : c.CrcValid is false ? "rechazado" : "no comprobado")}, " +
             $"BER {(c.BerBefore.HasValue ? $"{c.BerBefore:0.#####} ({c.IncorrectBits}/{c.ComparedBits})" : "No disponible")}, " +
             $"Hamming síndromes {(c.HammingSyndromes?.ToString() ?? "No disponible")}."))) +
-            "\nDuración = muestras emitidas / tasa; procesamiento = tiempo del algoritmo. Latencia acústica: No disponible.";
+            "\nDuración digital = muestras emitidas / tasa solo para señal generada. El tiempo de procesamiento no mide latencia acústica. Latencia acústica: No disponible.";
         AddBarChart("Duración de transmisión · eje x: s", selected,
             t => t.TransmissionSeconds, "s");
         AddBarChart("Rendimiento útil agregado · eje x: bit/s", selected,
@@ -204,8 +227,11 @@ public partial class MainWindow
         string unit, string[]? labels = null)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 10) };
-        panel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        double max = Math.Max(0.000001, values.Where(v => v.Value.HasValue).Select(v => v.Value!.Value).DefaultIfEmpty(0).Max());
+        panel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+        double observedMax = values.Where(v => v.Value.HasValue).Select(v => v.Value!.Value).DefaultIfEmpty(0).Max();
+        double max = observedMax > 0 ? observedMax : 1;
+        panel.Children.Add(new TextBlock { Text = observedMax > 0 ? $"Escala de barras: 0–{max:0.#####} {unit} (máximo de esta serie)" : "Sin magnitudes positivas disponibles en esta serie.",
+            Foreground = (Brush)FindResource("MutedBrush"), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) });
         for (int i = 0; i < values.Length; i++)
         {
             var v = values[i];
@@ -213,9 +239,9 @@ public partial class MainWindow
             row.Children.Add(new TextBlock { Text = $"{v.Name} · {v.Source}: " +
                 (v.Value.HasValue ? labels?[i] ?? $"{v.Value:0.###} {unit}" : "No disponible"), FontSize = 12 });
             if (v.Value.HasValue)
-                row.Children.Add(new Border { Width = Math.Max(2, 420 * v.Value.Value / max), Height = 9,
-                    Background = v.Name.Contains("BFSK", StringComparison.OrdinalIgnoreCase) ? Brushes.DeepSkyBlue : Brushes.MediumPurple,
-                    HorizontalAlignment = HorizontalAlignment.Left });
+                row.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = v.Value.Value, Height = 9,
+                    Foreground = v.Name.Contains("BFSK", StringComparison.OrdinalIgnoreCase) ? Brushes.DeepSkyBlue : Brushes.MediumPurple,
+                    ToolTip = $"{v.Value:0.#####} {unit}" });
             panel.Children.Add(row);
         }
         ComparisonCharts.Children.Add(panel);

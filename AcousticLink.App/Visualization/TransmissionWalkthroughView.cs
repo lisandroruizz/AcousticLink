@@ -18,7 +18,7 @@ public sealed class TransmissionWalkthroughView : UserControl
     private readonly TextBlock count = new();
     private readonly ListBox stages = new() { MinWidth = 170 };
     private readonly ListBox items = new() { FontFamily = new FontFamily("Consolas"), FontSize = 13 };
-    private readonly WaveformView waveform = new() { Height = 180 };
+    private readonly WaveformView waveform = new() { Height = 130 };
     private readonly StackPanel graph = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBlock waveformLabel = new() { Foreground = Brushes.LightGray, TextWrapping = TextWrapping.Wrap };
     private readonly Button previous = new() { Content = "← Anterior" }, next = new() { Content = "Siguiente →" },
@@ -36,26 +36,44 @@ public sealed class TransmissionWalkthroughView : UserControl
         foreach (var button in new[] { previous, next, restart, play }) { button.Margin = new Thickness(0, 0, 6, 0); button.Padding = new Thickness(9, 5, 9, 5); controls.Children.Add(button); }
         Grid.SetRow(controls, 1); root.Children.Add(controls);
         var content = new Grid(); content.ColumnDefinitions.Add(new() { Width = new GridLength(190) }); content.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        content.RowDefinitions.Add(new()); content.RowDefinitions.Add(new() { Height = GridLength.Auto });
         stages.SelectionChanged += (_, _) => { if (stages.SelectedIndex >= 0) { stepIndex = stages.SelectedIndex; page = 0; Render(); } };
         content.Children.Add(stages);
         var right = new Grid { Margin = new Thickness(12, 0, 0, 0) };
         right.RowDefinitions.Add(new() { Height = GridLength.Auto }); right.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        right.RowDefinitions.Add(new()); right.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        right.RowDefinitions.Add(new() { Height = GridLength.Auto }); right.RowDefinitions.Add(new() { Height = GridLength.Auto });
         right.RowDefinitions.Add(new() { Height = GridLength.Auto });
         right.Children.Add(title); Grid.SetRow(explanation, 1); right.Children.Add(explanation);
-        var list = new Grid(); list.RowDefinitions.Add(new()); list.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var list = new Grid(); list.RowDefinitions.Add(new() { Height = GridLength.Auto }); list.RowDefinitions.Add(new() { Height = GridLength.Auto });
         items.SelectionChanged += (_, _) => { if (items.SelectedItem is WalkthroughItem item) { detail.Text = $"{item.Label}\n{item.Value}\n{item.Detail}"; waveform.SetSelection(item.StartSeconds, item.EndSeconds); } };
+        items.MaxHeight = 270;
         list.Children.Add(items);
         var pagination = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 5, 0, 5) };
         pagination.Children.Add(beforePage); count.Margin = new Thickness(8, 4, 8, 0); pagination.Children.Add(count); pagination.Children.Add(afterPage);
         Grid.SetRow(pagination, 1); list.Children.Add(pagination); Grid.SetRow(list, 2); right.Children.Add(list);
-        var detailBorder = new Border { Background = new SolidColorBrush(Color.FromRgb(28, 46, 67)),
-            Child = new ScrollViewer { Content = detail, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
-            CornerRadius = new CornerRadius(5), MinHeight = 65, MaxHeight = 85 };
-        Grid.SetRow(detailBorder, 3); right.Children.Add(detailBorder);
+        var detailPanel = new Expander { Header = "Inspector del elemento seleccionado · valor, límites y procedencia", Margin = new Thickness(0, 5, 0, 0),
+            Content = new Border { Background = new SolidColorBrush(Color.FromRgb(28, 46, 67)),
+                Child = new ScrollViewer { Content = detail, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+                CornerRadius = new CornerRadius(5), MaxHeight = 95 } };
+        Grid.SetRow(detailPanel, 3); right.Children.Add(detailPanel);
         graph.Children.Add(waveformLabel); graph.Children.Add(waveform);
         Grid.SetRow(graph, 4); right.Children.Add(graph);
-        Grid.SetColumn(right, 1); content.Children.Add(right); Grid.SetRow(content, 2); root.Children.Add(content);
+        var rightScroll = new ScrollViewer { Content = right, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Margin = new Thickness(12, 0, 0, 0) };
+        right.Margin = new Thickness(0);
+        Grid.SetColumn(rightScroll, 1); content.Children.Add(rightScroll); Grid.SetRow(content, 2); root.Children.Add(content);
+        SizeChanged += (_, _) =>
+        {
+            bool narrow = ActualWidth < 690;
+            content.ColumnDefinitions[0].Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(190);
+            content.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            content.RowDefinitions[0].Height = narrow ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+            content.RowDefinitions[1].Height = narrow ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            stages.MaxHeight = narrow ? 106 : double.PositiveInfinity;
+            Grid.SetColumn(rightScroll, narrow ? 0 : 1);
+            Grid.SetRow(rightScroll, narrow ? 1 : 0);
+            rightScroll.Margin = narrow ? new Thickness(0, 7, 0, 0) : new Thickness(12, 0, 0, 0);
+        };
         Content = root;
         var row = new FrameworkElementFactory(typeof(StackPanel));
         var label = new FrameworkElementFactory(typeof(TextBlock)); label.SetBinding(TextBlock.TextProperty, new Binding(nameof(WalkthroughItem.Label)));

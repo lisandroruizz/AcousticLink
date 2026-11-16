@@ -433,6 +433,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         ReceptionAView.Clear(); ReceptionBView.Clear();
         ReceivedFrameExplorer.Clear();
         MetricsAView.Clear(); MetricsBView.Clear();
+        AnalysisSummaryHeadline.Text = "Sin mediciones. Seleccioná audio en Receptor y medí la grabación.";
         HammingWordTraceView.Clear();
         TechnicalDiagnosticView.Clear();
         AnalysisPipelineText.Text = "Señal → bits → Hamming → CRC y mensaje: No disponible";
@@ -986,6 +987,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         experimentCancellation = cancellation;
         CancelExperimentButton.IsEnabled = true;
         ExperimentSummaryText.Text = "Midiendo contra las referencias indicadas...";
+        AnalysisSummaryHeadline.Text = "Medición en curso · resultados aún no disponibles";
         try
         {
             var result = await Task.Run(() => new FdmExperimentAnalyzer().Analyze(selected.Audio.GetSamples(), selected.Audio.SampleRate,
@@ -1029,6 +1031,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             ExperimentChannelAText.Text = ChannelSummary(result.ChannelA);
             ExperimentChannelBText.Text = ChannelSummary(result.ChannelB);
             ExperimentSummaryText.Text += $"\nMedición UTC: {result.AnalyzedAt:O}";
+            AnalysisSummaryHeadline.Text = $"Audio analizado: {result.AudioDurationSeconds:0.000} s · {result.SampleRate} Hz · " +
+                $"CRC A: {Crc(result.ChannelA)} · CRC B: {Crc(result.ChannelB)}. Referencias declaradas solo para métricas.";
             ExperimentDetailsText.Text = result.Synchronization.Reason + "\n" + string.Join("\n\n", new[] { result.ChannelA, result.ChannelB }.Select(c =>
                 $"Canal {c.Channel}: {c.Diagnostic}\nReferencia original: {c.OriginalReferenceBits}\nReferencia transmitida: {c.TransmittedReferenceBits}\n" +
                 $"Recibidos: {c.Before?.ObservedBits ?? "no evaluables"}\nReconstruidos: {c.After?.ObservedBits ?? "no corresponde/no evaluables"}"));
@@ -1040,6 +1044,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             experimentCancellation = null;
             if (lastExperiment is null)
             {
+                AnalysisSummaryHeadline.Text = ExperimentSummaryText.Text;
                 ExperimentChannelAText.Text = ExperimentChannelBText.Text = "Sin resultado nuevo. " + ExperimentSummaryText.Text;
                 MetricsAView.Clear(ExperimentSummaryText.Text); MetricsBView.Clear(ExperimentSummaryText.Text);
                 HammingWordTraceView.Clear(ExperimentSummaryText.Text);

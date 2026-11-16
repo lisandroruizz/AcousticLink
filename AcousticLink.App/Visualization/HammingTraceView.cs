@@ -40,6 +40,7 @@ public sealed class HammingTraceView : UserControl
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var top = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
         channel.MinWidth = 140; channel.Margin = new Thickness(0, 0, 12, 0); DockPanel.SetDock(channel, Dock.Left);
+        summary.TextWrapping = TextWrapping.Wrap; summary.VerticalAlignment = VerticalAlignment.Center;
         top.Children.Add(channel); top.Children.Add(summary); root.Children.Add(top);
         var info = new StackPanel(); info.Children.Add(counters); info.Children.Add(scope); Grid.SetRow(info, 1); root.Children.Add(info);
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.32, GridUnitType.Star) });
@@ -48,7 +49,7 @@ public sealed class HammingTraceView : UserControl
         ScrollViewer.SetHorizontalScrollBarVisibility(words, ScrollBarVisibility.Disabled);
         inspector.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); inspector.RowDefinitions.Add(new RowDefinition());
         inspector.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        selectedHeading.FontSize = 18; selectedHeading.Margin = new Thickness(0, 0, 8, 4);
+        selectedHeading.FontSize = 18; selectedHeading.TextWrapping = TextWrapping.Wrap; selectedHeading.Margin = new Thickness(0, 0, 8, 4);
         var wordToolbar = new DockPanel();
         DockPanel.SetDock(showTechnical, Dock.Right); wordToolbar.Children.Add(showTechnical); wordToolbar.Children.Add(selectedHeading);
         showTechnical.Click += (_, _) => { detailTools.SelectedIndex = showTechnical.IsChecked == true ? 1 : 0; showTechnical.Content = showTechnical.IsChecked == true ? "Volver a transformación" : "Paridad / detalle"; };
@@ -176,10 +177,14 @@ public sealed class HammingTraceView : UserControl
         selectedWords[selected.Channel] = trace.WordIndex;
         selectedHeading.Text = $"Palabra {trace.WordIndex + 1} · {HammingTeaching.Section(selected.Reception, trace)?.Name ?? "Sección no disponible"} · {StateLabel(trace.State)}";
         technical.Children.Add(Label(HammingTeaching.Association(selected.Reception, trace)));
+        string reference = trace.EncodedBitOffset >= 0 && trace.EncodedBitOffset + 7 <= selected.TransmittedReferenceBits.Length
+            ? selected.TransmittedReferenceBits.Substring(trace.EncodedBitOffset, 7) : "No disponible";
+        technical.Children.Add(Label($"Referencia experimental codificada: {reference}. Solo se usa para comparar; no interviene en la decodificación.", 12));
         string operation = trace.State switch { Hamming74TraceState.BitFlipped => $"Inversión en posición {trace.FlippedPosition} (síndrome {trace.Syndrome})",
             Hamming74TraceState.ErasuresRecovered => $"Candidata única · {trace.RecoveredPositions.Count} borrados recuperados",
             Hamming74TraceState.Unchanged => $"Sin modificaciones · síndrome {trace.Syndrome}", _ => "Sin reconstrucción" };
-        var treatment = Label($"RECIBIDA → {operation} → RESULTANTE", 13);
+        var treatment = Label($"SÍMBOLOS RECIBIDOS → {operation} → PALABRA RESULTANTE", 13);
+        treatment.TextWrapping = TextWrapping.Wrap;
         treatment.ToolTip = operation; detail.Children.Add(treatment);
         technical.Children.Add(Label(operation));
         var cells = new UniformGrid { Columns = 7, MinWidth = 350, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -210,7 +215,8 @@ public sealed class HammingTraceView : UserControl
         var data = reconstructed; data.Children.Add(Label("↓ INFORMACIÓN  ", 14));
         if (trace.DataBits is null) data.Children.Add(Label("No disponible", 22));
         else foreach (char bit in trace.DataBits) data.Children.Add(new Border { Child = new TextBlock { Text = bit.ToString(), FontSize = 26, FontFamily = (FontFamily)FindResource("CodeFont") }, Padding = new Thickness(12, 0, 12, 0), BorderBrush = Brushes.SlateGray, BorderThickness = new Thickness(0, 0, 0, 1) });
-        explanation.Text = HammingTeaching.Explain(trace);
+        explanation.Text = HammingTeaching.Explain(trace) + " El mensaje solo se publica tras validar CRC y UTF-8.";
+        explanation.TextWrapping = TextWrapping.Wrap;
         var parityChoice = new ComboBox { ItemsSource = new[] { "Relaciones de paridad (opcional)", "P1: posiciones 1, 3, 5, 7", "P2: posiciones 2, 3, 6, 7", "P4: posiciones 4, 5, 6, 7" }, SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 0) };
         var parityInfo = Label("Propiedades del código de paridad par; no representan pasos ejecutados.", 12);
         parityChoice.SelectionChanged += (_, _) =>
