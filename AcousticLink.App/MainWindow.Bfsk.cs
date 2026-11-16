@@ -17,6 +17,7 @@ public partial class MainWindow
         InvalidateWalkthrough("Cambió la modalidad del emisor. Prepará un recorrido nuevo.");
         bool bfsk = IsBfskTransmit;
         TransmitChannelBPanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
+        TransmitModeDescription.Text = bfsk ? "Un mensaje por canal A, sin relleno FDM" : "Dos mensajes en canales simultáneos";
         Grid.SetColumnSpan(DashboardTransmitACard, bfsk ? 3 : 1);
         FdmProfilePanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         TransmitConfigurationTitle.Text = bfsk ? "CONFIGURACIÓN BFSK · CANAL ÚNICO" : "CONFIGURACIÓN FDM";
@@ -25,6 +26,18 @@ public partial class MainWindow
         TransmitPaddingNote.Text = bfsk ? "Cabecera sin Hamming. Una sola portadora de datos por símbolo; sin relleno ni canal B."
             : "Cabecera sin Hamming. El relleno FDM queda fuera del CRC y del bloque protegido.";
         UpdateFdmTextInfo();
+        MarkGeneratedSignalOutdated();
+    }
+
+    private void TransmitPanels_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (TransmitContentGrid is null) return;
+        bool compact = e.NewSize.Width < 760;
+        TransmitMessageColumn.Width = new GridLength(compact ? 1 : 1.2, GridUnitType.Star);
+        TransmitColumnGap.Width = new GridLength(compact ? 0 : 14);
+        TransmitDetailsColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Grid.SetColumn(TransmitDetailsPanel, compact ? 0 : 2);
+        Grid.SetRow(TransmitDetailsPanel, compact ? 1 : 0);
     }
 
     private void ReceiverMode_Changed(object sender, SelectionChangedEventArgs e)

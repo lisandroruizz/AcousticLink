@@ -224,9 +224,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     private void FdmText_TextChanged(object sender, TextChangedEventArgs e)
-    { InvalidateWalkthrough("Cambió el mensaje del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); }
+    { InvalidateWalkthrough("Cambió el mensaje del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); MarkGeneratedSignalOutdated(); }
     private void HammingTransmit_Changed(object sender, RoutedEventArgs e)
-    { InvalidateWalkthrough("Cambió Hamming del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); }
+    { InvalidateWalkthrough("Cambió Hamming del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); MarkGeneratedSignalOutdated(); }
+
+    private void MarkGeneratedSignalOutdated()
+    {
+        if (FdmTextStatusText is null || playing) return;
+        if (!fdmTextsValid) FdmTextStatusText.Text = FdmTextInfoText.Text;
+        else if (generatedSignal is not null)
+            FdmTextStatusText.Text = "El último buffer digital corresponde a una preparación anterior. Prepará otra vista o transmití el mensaje actual.";
+    }
 
     private void UpdateFdmTextInfo()
     {
