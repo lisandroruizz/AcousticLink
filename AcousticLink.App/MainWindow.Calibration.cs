@@ -19,6 +19,19 @@ public partial class MainWindow
     private bool calibrationEmitting;
     private CalibrationMode SelectedCalibrationMode => CalibrationModeCombo.SelectedIndex == 1 ? CalibrationMode.Fdm : CalibrationMode.Bfsk;
 
+    private void CalibrationWorkspace_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool stacked = CalibrationWorkspace.ActualWidth < 900;
+        CalibrationQuickActions.Visibility = stacked ? Visibility.Visible : Visibility.Collapsed;
+        CalibrationWorkspace.ColumnDefinitions[0].Width = stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(420);
+        CalibrationWorkspace.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        CalibrationWorkspace.RowDefinitions[1].Height = stacked ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+        CalibrationWorkspace.RowDefinitions[2].Height = stacked ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        CalibrationStepsScroll.MaxHeight = stacked ? Math.Max(190, CalibrationWorkspace.ActualHeight * 0.48) : double.PositiveInfinity;
+        Grid.SetColumn(CalibrationResultsScroll, stacked ? 0 : 1);
+        Grid.SetRow(CalibrationResultsScroll, stacked ? 2 : 1);
+    }
+
     private void CalibrationMode_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (CalibrationNoiseText is null) return;
@@ -39,7 +52,12 @@ public partial class MainWindow
         calibrationRevision++;
         calibrationCancellation?.Cancel();
         calibrationNoise = null;
+        CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = false;
         CalibrationNoiseText.Text = CalibrationSignalText.Text = "No disponible";
+        CalibrationNoiseSummary.Text = CalibrationSignalSummary.Text = "Pendiente";
+        CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush");
+        CalibrationNoiseMetrics.Text = CalibrationSignalMetrics.Text = "Sin medición";
+        CalibrationNoiseStepText.Text = "Referencia invalidada · repetí la captura";
         CalibrationSignalHeading.Text = "PRUEBA · PENDIENTE";
         CalibrationToneRows.Children.Clear();
         CalibrationAdviceText.Text = "La calibración caracteriza el canal; valide mensajes mediante el receptor y CRC.";
@@ -67,9 +85,9 @@ public partial class MainWindow
         string device = CalibrationDeviceText.Text.Trim();
         if (device.Length == 0) { CalibrationStateText.Text = "Identifique el dispositivo y las condiciones del ensayo."; return; }
         calibrationBusy = true;
-        if (noiseStage) { calibrationNoise = null; CalibrationNoiseText.Text = "Midiendo…"; CalibrationSignalText.Text = "No disponible"; CalibrationToneRows.Children.Clear(); }
+        if (noiseStage) { calibrationNoise = null; CalibrationNoiseText.Text = "Midiendo…"; CalibrationNoiseSummary.Text = "Capturando…"; CalibrationNoiseMetrics.Text = $"Objetivo: {seconds} s de audio real"; CalibrationNoiseStepText.Text = "Captura en curso"; ClearCalibrationTest(); }
         else ClearCalibrationTest();
-        CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = false;
+        CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = CalibrationEmitButton.IsEnabled = false;
         CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = false;
         CalibrationCancelButton.IsEnabled = true;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
@@ -104,6 +122,9 @@ public partial class MainWindow
                 CalibrationNoiseText.Text = DescribeLevel(result.Level) + $"\nOrigen: {result.Source}\n{result.DeviceDescription}\n" +
                     string.Join("\n", AcousticCalibration.Frequencies(mode).Select((frequency, i) =>
                         $"{frequency:0} Hz: {FormatPower(result.BandPowers[i])}"));
+                CalibrationNoiseSummary.Text = "Disponible";
+                CalibrationNoiseMetrics.Text = ShortLevel(result.Level);
+                CalibrationNoiseStepText.Text = "Lista · seguí con la prueba en el receptor";
                 CalibrationStateText.Text = "Referencia obtenida. Inicie la captura en el receptor y emita la prueba desde el otro equipo.";
             }
             else
@@ -121,7 +142,8 @@ public partial class MainWindow
         {
             if (!closing && revision == calibrationRevision)
             {
-                if (noiseStage) CalibrationNoiseText.Text = "No disponible: captura cancelada.";
+                if (noiseStage) { CalibrationNoiseText.Text = "No disponible: captura cancelada."; CalibrationNoiseSummary.Text = "Cancelada"; CalibrationNoiseMetrics.Text = "Datos parciales descartados"; CalibrationNoiseStepText.Text = "Repetí la referencia"; }
+                else { CalibrationSignalSummary.Text = "Cancelada"; CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush"); CalibrationSignalMetrics.Text = "Datos parciales descartados"; }
                 CalibrationStateText.Text = "Captura cancelada. Los datos parciales no se evalúan.";
             }
         }
@@ -129,7 +151,8 @@ public partial class MainWindow
         {
             if (!closing && revision == calibrationRevision)
             {
-                if (noiseStage) CalibrationNoiseText.Text = "No disponible: captura inconclusa.";
+                if (noiseStage) { CalibrationNoiseText.Text = "No disponible: captura inconclusa."; CalibrationNoiseSummary.Text = "Inconclusa"; CalibrationNoiseMetrics.Text = "Sin referencia válida"; CalibrationNoiseStepText.Text = "Repetí la referencia"; }
+                else { CalibrationSignalSummary.Text = "Inconclusa"; CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush"); CalibrationSignalMetrics.Text = "Sin prueba válida"; }
                 CalibrationStateText.Text = "Calibración inconclusa: " + ex.Message;
             }
         }
@@ -140,7 +163,9 @@ public partial class MainWindow
             calibrationBusy = false;
             if (!closing)
             {
-                CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = true;
+                CalibrationNoiseButton.IsEnabled = true;
+                CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = calibrationNoise is not null;
+                CalibrationEmitButton.IsEnabled = true;
                 CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = true;
                 CalibrationCancelButton.IsEnabled = calibrationEmitting;
                 CalibrationDeviceState.Text = calibrationCapture.IsRecording ? calibrationCapture.FormatDescription : "Dispositivo: inactivo · último formato: " + calibrationCapture.FormatDescription;
@@ -161,7 +186,7 @@ public partial class MainWindow
         try
         {
             var mode = SelectedCalibrationMode;
-            CalibrationStateText.Text = "Emitiendo prueba digital conocida: " + string.Join(" → ", AcousticCalibration.Frequencies(mode).Select(f => $"{f:0} Hz"));
+            CalibrationStateText.Text = "Reproduciendo señal digital en este equipo; esto no confirma recepción: " + string.Join(" → ", AcousticCalibration.Frequencies(mode).Select(f => $"{f:0} Hz"));
             await calibrationPlayback.PlayAsync(AcousticCalibration.Generate(mode), BfskToneGenerator.SampleRate, cancellation.Token);
             if (!closing) CalibrationStateText.Text = "Prueba emitida digitalmente; su recepción acústica debe medirse en el otro equipo.";
         }
@@ -173,7 +198,8 @@ public partial class MainWindow
             calibrationEmitting = false;
             if (!closing)
             {
-                CalibrationEmitButton.IsEnabled = CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = true;
+                CalibrationEmitButton.IsEnabled = CalibrationNoiseButton.IsEnabled = true;
+                CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = calibrationNoise is not null;
                 CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = true;
                 CalibrationCancelButton.IsEnabled = calibrationBusy;
             }
@@ -191,7 +217,7 @@ public partial class MainWindow
         calibrationBusy = true;
         ClearCalibrationTest();
         CalibrationCancelButton.IsEnabled = true;
-        CalibrationWavButton.IsEnabled = false;
+        CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = CalibrationEmitButton.IsEnabled = false;
         CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = false;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(windowLifetime.Token);
         calibrationCancellation = cancellation;
@@ -208,13 +234,13 @@ public partial class MainWindow
             }, cancellation.Token);
             if (revision == calibrationRevision && !closing) ShowCalibrationResult(result);
         }
-        catch (OperationCanceledException) { if (!closing && revision == calibrationRevision) CalibrationStateText.Text = "Análisis WAV cancelado."; }
-        catch (Exception ex) { if (!closing && revision == calibrationRevision) CalibrationStateText.Text = "WAV inconcluso: " + ex.Message; }
+        catch (OperationCanceledException) { if (!closing && revision == calibrationRevision) { CalibrationStateText.Text = "Análisis WAV cancelado."; CalibrationSignalSummary.Text = "Cancelado"; CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush"); } }
+        catch (Exception ex) { if (!closing && revision == calibrationRevision) { CalibrationStateText.Text = "WAV inconcluso: " + ex.Message; CalibrationSignalSummary.Text = "Inconclusa"; CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush"); CalibrationSignalMetrics.Text = "Sin prueba válida"; } }
         finally
         {
             if (ReferenceEquals(calibrationCancellation, cancellation)) calibrationCancellation = null;
             calibrationBusy = false;
-            if (!closing) { CalibrationWavButton.IsEnabled = true; CalibrationCancelButton.IsEnabled = false; CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = true; }
+            if (!closing) { CalibrationNoiseButton.IsEnabled = CalibrationEmitButton.IsEnabled = true; CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = calibrationNoise is not null; CalibrationCancelButton.IsEnabled = false; CalibrationModeCombo.IsEnabled = CalibrationDeviceText.IsEnabled = true; }
         }
     }
 
@@ -224,6 +250,9 @@ public partial class MainWindow
     {
         CalibrationSignalText.Text = "No disponible";
         CalibrationSignalHeading.Text = "PRUEBA · PENDIENTE";
+        CalibrationSignalSummary.Text = "Pendiente";
+        CalibrationSignalSummary.Foreground = (Brush)FindResource("WarningBrush");
+        CalibrationSignalMetrics.Text = "Sin medición";
         CalibrationToneRows.Children.Clear();
         CalibrationAdviceText.Text = "Ensayo pendiente. La recepción de mensajes requiere validación CRC.";
     }
@@ -233,6 +262,10 @@ public partial class MainWindow
         $"{(double.IsNegativeInfinity(level.Dbfs) ? "−∞" : level.Dbfs.ToString("0.0"))} dBFS · pico {level.Peak:0.000} · " +
         (level.PossibleClipping ? "posible clipping" : "sin clipping detectado");
 
+    private static string ShortLevel(CalibrationLevel level) =>
+        $"RMS {level.Rms:0.000000} · {(double.IsNegativeInfinity(level.Dbfs) ? "−∞" : level.Dbfs.ToString("0.0"))} dBFS\n" +
+        $"Pico {level.Peak:0.000} · {(level.PossibleClipping ? "posible clipping" : "sin clipping detectado")}";
+
     private static string FormatPower(double power) => power > 0
         ? $"{CarrierEnergyMap.Decibels(power):0.0} dB re potencia digital 1"
         : "sin energía medible (−∞ dB)";
@@ -241,6 +274,11 @@ public partial class MainWindow
     {
         CalibrationStateText.Text = result.Status;
         CalibrationSignalHeading.Text = result.Source == "Micrófono" ? "PRUEBA · MICRÓFONO" : "PRUEBA · WAV IMPORTADO";
+        CalibrationSignalSummary.Text = result.StartSeconds.HasValue ? "Secuencia localizada" : "Inconclusa";
+        CalibrationSignalSummary.Foreground = (Brush)FindResource(result.StartSeconds.HasValue ? "SuccessBrush" : "WarningBrush");
+        var snr = result.Tones.Where(t => t.SnrDb.HasValue).Select(t => $"{t.Frequency:0} Hz {t.SnrDb:0.0} dB");
+        CalibrationSignalMetrics.Text = ShortLevel(result.Level) + "\nSNR por frecuencia: " +
+            (result.Source != "Micrófono" ? "no comparable · WAV" : snr.Any() ? string.Join(" · ", snr) : "no disponible");
         CalibrationSignalText.Text = DescribeLevel(result.Level) + $"\nOrigen: {result.Source}\n" +
             (result.StartSeconds.HasValue ? $"Inicio estimado de la secuencia: {result.StartSeconds:0.00} s" : "Inicio: no disponible");
         CalibrationToneRows.Children.Clear();
