@@ -28,7 +28,7 @@ var thread = new Thread(() =>
         var capture = (AudioCaptureService)typeof(MainWindow).GetField("capture", flags)!.GetValue(window)!;
         object? Call(string name, params object[] args) => typeof(MainWindow).GetMethod(name, flags)!.Invoke(window, args);
         void Run(string name, bool bfsk, float[] audio, bool refreshUi, long expectedReceipts,
-            int blockSize = 4800, int cadenceMs = 100, bool burst = false)
+            int blockSize = 4800, int cadenceMs = 100, bool burst = false, bool comparisonLoad = false)
         {
             var session = Activator.CreateInstance(type, true)!;
             type.GetField("IsBfsk")!.SetValue(session, bfsk);
@@ -38,6 +38,21 @@ var thread = new Thread(() =>
             type.GetField("Worker")!.SetValue(session, worker);
             typeof(AudioCaptureService).GetField("running", flags)!.SetValue(capture, true);
             type.GetField("MicrophoneStarted")!.SetValue(session, true);
+            using var loadCancellation = new CancellationTokenSource();
+            int completedPairs = 0;
+            var loadTask = comparisonLoad ? Task.Run(() =>
+            {
+                try
+                {
+                    while (!loadCancellation.IsCancellationRequested)
+                    {
+                        new AcousticLink.App.Experiments.ComparisonExperiment().RunPair("carga", "Hola", "Mundo",
+                            true, 20, 42, FdmAmplitudeProfile.Original, loadCancellation.Token);
+                        Interlocked.Increment(ref completedPairs);
+                    }
+                }
+                catch (OperationCanceledException) { }
+            }) : Task.CompletedTask;
             long Counter(string field) => (long)type.GetField(field)!.GetValue(session)!;
             var clock = Stopwatch.StartNew();
             int blocks = 0;
@@ -57,6 +72,8 @@ var thread = new Thread(() =>
             bool drained = SpinWait.SpinUntil(() => Counter("ConsumedSamples") == Counter("AcceptedSamples"), 5000);
             string report = (string)Call("DescribeContinuousProgress", session)!;
             Console.WriteLine($"{name}: {audio.Length} muestras, {clock.Elapsed.TotalSeconds:0.00} s reloj, cola máxima {Counter("MaxQueue")}, pendiente máximo {Counter("MaxPendingSamples")}, rechazados {Counter("RejectedBlocks")}");
+            loadCancellation.Cancel(); loadTask.GetAwaiter().GetResult();
+            if (comparisonLoad) Console.WriteLine($"{name}: pares sintéticos completos durante la entrega: {completedPairs}");
             Console.WriteLine(string.Join(" | ", report.Split('\n').Where(x => x.StartsWith("Append receptor:") || x.StartsWith("Diagnóstico:") || x.StartsWith("Monitor/resumen:") || x.StartsWith("Total worker:") || x.StartsWith("Sincronizador:"))));
             if (!drained || Counter("RejectedBlocks") != 0) throw new InvalidOperationException($"{name}: muestras pendientes o rechazadas");
             long receipts = ((IContinuousTextReceiver?)type.GetField("Receiver")!.GetValue(session))?.ReceptionCount ?? 0;
@@ -71,6 +88,15 @@ var thread = new Thread(() =>
         var fdm = new FdmBitstreamGenerator().GenerateTextFrames("Hola", "Mundo");
         var random = new Random(719);
         var noise = Enumerable.Range(0, 48000 * 4).Select(_ => (float)((random.NextDouble() - .5) * .04)).ToArray();
+        if (Environment.GetEnvironmentVariable("ACOUSTICLINK_COMPARISON_LOAD") == "1")
+        {
+            Run("BFSK/base/5 ms", true, bfsk, true, 1, 240, 5);
+            Run("BFSK/comparación/5 ms", true, bfsk, true, 1, 240, 5, comparisonLoad: true);
+            Run("FDM/base/5 ms", false, fdm, true, 1, 240, 5);
+            Run("FDM/comparación/5 ms", false, fdm, true, 1, 240, 5, comparisonLoad: true);
+            window.Close(); app.Shutdown();
+            return;
+        }
         if (Environment.GetEnvironmentVariable("ACOUSTICLINK_SMALL_BLOCKS") == "1")
         {
             Run("silencio/5 ms", false, new float[48000 * 5], true, 0, 240, 5);

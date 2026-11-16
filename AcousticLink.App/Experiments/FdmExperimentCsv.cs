@@ -27,13 +27,13 @@ public static class FdmExperimentCsv
         foreach (var channel in new[] { result.ChannelA, result.ChannelB })
         {
             var syncChannel = channel.Channel == "A" ? result.Synchronization.ChannelA : result.Synchronization.ChannelB;
-            var fields = new List<string> { result.AnalyzedAt.ToUniversalTime().ToString("O"), result.AudioSource, result.SampleRate.ToString(Numbers),
-                Number(result.AudioDurationSeconds), channel.Channel, channel.ExpectedMessage, result.UsesHamming ? "si" : "no",
+            var fields = new List<string> { result.AnalyzedAt.ToUniversalTime().ToString("O"), CsvText.Safe(result.AudioSource), result.SampleRate.ToString(Numbers),
+                Number(result.AudioDurationSeconds), channel.Channel, CsvText.Safe(channel.ExpectedMessage), result.UsesHamming ? "si" : "no",
                 result.Synchronization.State.ToString(), Number(result.Synchronization.StartSeconds), channel.Reception.HeaderValid ? "si" : "no",
                 syncChannel?.Header.Bits ?? "", channel.OriginalReferenceBits, channel.TransmittedReferenceBits };
             var declared = result.DeclaredAmplitudeProfile.HasValue
                 ? Signals.FdmAmplitudeProfiles.Get(result.DeclaredAmplitudeProfile.Value) : null;
-            fields.AddRange(new[] { declared?.Name ?? "no_informado", declared?.ChannelA.ToString("0.###", Numbers) ?? "",
+            fields.AddRange(new[] { CsvText.Safe(declared?.Name ?? "no_informado"), declared?.ChannelA.ToString("0.###", Numbers) ?? "",
                 declared?.ChannelB.ToString("0.###", Numbers) ?? "" });
             AddComparison(fields, channel.Before, channel.TransmittedReferenceBits.Length);
             AddComparison(fields, channel.After, result.UsesHamming ? channel.OriginalReferenceBits.Length : null);
@@ -42,7 +42,7 @@ public static class FdmExperimentCsv
                 h?.AppliedBitFlips.ToString(Numbers) ?? "", h?.InconclusiveWords.ToString(Numbers) ?? "", h?.IncompleteWords.ToString(Numbers) ?? "",
                 h is null ? "" : string.Join(" | ", h.Words.Where(w => w.FlippedPosition.HasValue).Select(w => $"palabra {w.WordIndex + 1}: {w.FlippedPosition}")),
                 channel.Reception.State.ToString(), channel.Reception.CrcValid is true ? "valido" : channel.Reception.CrcValid is false ? "invalido" : "no_comprobado",
-                channel.Diagnostic });
+                CsvText.Safe(channel.Diagnostic) });
             fields.AddRange(new[] { result.ErasureRecoveryEnabled ? "si" : "no", h?.RecoveredErasures.ToString(Numbers) ?? "",
                 h?.ErasureRecoveredWords.ToString(Numbers) ?? "", h?.UnrecoverableWords.ToString(Numbers) ?? "", "FDM" });
             rows.Add(Line(fields));

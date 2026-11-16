@@ -1,5 +1,14 @@
 # Estado de desarrollo de AcousticLink
 
+## Estabilización final · 16-11-2026
+
+Rama `fix/final-audit-hardening`, base `main` en `678ebf379a09b7846cfeed954f365e5cbc93bbec`, árbol limpio al iniciar. No se crearon commits ni se hizo merge o push.
+
+- Los dos CSV anteponen apóstrofo a campos **textuales** cuyo primer carácter tras espacios o controles es `=`, `+`, `-` o `@`; conservan columnas, comillas, `;`, saltos, UTF-8/BOM y números. Las barras de comparación usan `ExperimentMode` y sus IDs largos se muestran en una línea con el valor completo en tooltip. Emisor y Calibración excluyen sus reproducciones entre sí y explican el bloqueo; captura y escucha mantienen su independencia.
+- La comparación sintética durante escucha continua es posible. Una entrega digital temporizada de 5 ms, con y sin carga, completó BFSK y FDM con una recepción por modo y cero rechazos; bajo carga se completaron 11 y 12 pares sintéticos. No se observó degradación reproducible en esa corrida, por lo que no se bloqueó la operación. La evidencia depende del equipo y no sustituye un ensayo acústico.
+- Compilación aislada: 0 errores y 0 advertencias. Aprobaron `VerifyComparisonExperiment`, `VerifyFdmExperimentMetrics`, `VerifyCompactLayout`, `VerifyFdmAmplitudeProfiles`, `VerifyHammingErasureRecovery`, `VerifyWpfDashboard`, `VerifyCalibrationWorkspace`, `VerifyContinuousWorkspace`, `VerifyContinuousProgress` y `VerifyContinuousPaced`; este último también aprobó con carga comparativa. Las pruebas nuevas cubren fórmulas CSV, preservación numérica, IDs engañosos, bloqueo cruzado sin hardware y entrega temporizada. Render WPF con ID largo a 820 × 600: `C:\Users\licho\.codex\visualizations\2026\11\16\01a1e347-9466-7620-a906-6c1e2ba2f670\final-hardening\comparacion-barras-ids-largos.png`.
+- Pendientes: reproducir/cancelar/errar audio real y repetir la carga junto con captura física y escucha en equipos de destino; validar enlace acústico BFSK/FDM entre dos computadoras y DPI físico al 125 %. No se cambiaron protocolo, sincronización, métricas ni parámetros del módem.
+
 ## Panel general y distribución de pruebas técnicas · 16-11-2026
 
 Rama `feature/wpf-dashboard-experience`, HEAD inicial `91e24f24a52dbba431de0385f93967bac9446b38`, árbol limpio al comenzar. Sin cambio de rama, commit, merge ni push.

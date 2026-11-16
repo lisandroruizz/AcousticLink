@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using AcousticLink.App.Experiments;
@@ -206,12 +207,12 @@ public partial class MainWindow
             if (t.Mode == ExperimentMode.Bfsk && t.Source == ExperimentSource.Generated)
                 duration = c.TransmittedBits * BfskToneGenerator.DefaultBitDurationSeconds;
             double? rate = duration is > 0 ? (c.MatchesReference ? c.UsefulBits : 0) / duration.Value : null;
-            return (Name: t.Id + " · " + c.Channel, Value: rate, Source: t.Source);
+            return (Name: t.Id + " · " + c.Channel, Value: rate, Source: t.Source, Mode: t.Mode);
         })).ToArray(), "bit/s");
         AddBarChart("BER previa por canal · eje x: errores / bits comparados", selected.SelectMany(t => t.Channels.Select(c =>
-            (Name: t.Id + " · " + c.Channel, Value: c.BerBefore, Source: t.Source))).ToArray(), "");
+            (Name: t.Id + " · " + c.Channel, Value: c.BerBefore, Source: t.Source, Mode: t.Mode))).ToArray(), "");
         AddBarChart("BER posterior a Hamming por canal · eje x: errores / bits comparados", selected.SelectMany(t => t.Channels.Select(c =>
-            (Name: t.Id + " · " + c.Channel, Value: c.BerAfter, Source: t.Source))).ToArray(), "");
+            (Name: t.Id + " · " + c.Channel, Value: c.BerAfter, Source: t.Source, Mode: t.Mode))).ToArray(), "");
         AddBarChart("Mensajes válidos / esperados · eje x: tramas", selected,
             t => t.ValidFrames, "tramas", t => $"{t.ValidFrames}/{(t.ExpectedFrames > 0 ? t.ExpectedFrames.ToString() : "No disponible")}");
         AddBarChart("CRC rechazados · eje x: tramas", selected, t => t.CrcRejectedFrames, "tramas");
@@ -221,9 +222,9 @@ public partial class MainWindow
 
     private void AddBarChart(string title, IReadOnlyList<ComparisonTrial> trials, Func<ComparisonTrial, double?> value,
         string unit, Func<ComparisonTrial, string>? label = null) => AddBarChart(title,
-        trials.Select(t => (t.Id, value(t), t.Source)).ToArray(), unit, label is null ? null : trials.Select(label).ToArray());
+        trials.Select(t => (t.Id, value(t), t.Source, t.Mode)).ToArray(), unit, label is null ? null : trials.Select(label).ToArray());
 
-    private void AddBarChart(string title, (string Name, double? Value, ExperimentSource Source)[] values,
+    private void AddBarChart(string title, (string Name, double? Value, ExperimentSource Source, ExperimentMode Mode)[] values,
         string unit, string[]? labels = null)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 10) };
@@ -235,13 +236,21 @@ public partial class MainWindow
         for (int i = 0; i < values.Length; i++)
         {
             var v = values[i];
-            var row = new StackPanel { Margin = new Thickness(0, 2, 0, 4) };
+            var row = new Grid { Margin = new Thickness(0, 2, 0, 4) };
+            row.SetBinding(FrameworkElement.MaxWidthProperty, new Binding("ActualWidth") { Source = ComparisonResultsScroll });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             row.Children.Add(new TextBlock { Text = $"{v.Name} · {v.Source}: " +
-                (v.Value.HasValue ? labels?[i] ?? $"{v.Value:0.###} {unit}" : "No disponible"), FontSize = 12 });
+                (v.Value.HasValue ? labels?[i] ?? $"{v.Value:0.###} {unit}" : "No disponible"), FontSize = 12,
+                TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = v.Name });
             if (v.Value.HasValue)
-                row.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = v.Value.Value, Height = 9,
-                    Foreground = v.Name.Contains("BFSK", StringComparison.OrdinalIgnoreCase) ? Brushes.DeepSkyBlue : Brushes.MediumPurple,
-                    ToolTip = $"{v.Value:0.#####} {unit}" });
+            {
+                var bar = new ProgressBar { Minimum = 0, Maximum = max, Value = v.Value.Value, Height = 9,
+                    Foreground = v.Mode == ExperimentMode.Bfsk ? Brushes.DeepSkyBlue : Brushes.MediumPurple,
+                    ToolTip = $"{v.Value:0.#####} {unit}" };
+                Grid.SetRow(bar, 1);
+                row.Children.Add(bar);
+            }
             panel.Children.Add(row);
         }
         ComparisonCharts.Children.Add(panel);

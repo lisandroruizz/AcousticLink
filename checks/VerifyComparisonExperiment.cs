@@ -72,6 +72,40 @@ var bfskChannel = parsedRows.Single(row => row[1] == "par-ñ-BFSK" && row[7] == 
 Require(unknownTotal[usefulColumn] == "" &&
     double.Parse(bfskChannel[durationColumn], System.Globalization.CultureInfo.InvariantCulture) < bfsk.TransmissionSeconds,
     "CSV sin referencia y denominador individual BFSK");
+foreach (string dangerous in new[] { "=SUMA(1;1)", "+123", "-1+2", "@SUMA(1;1)", "  =SUMA(1;1)", "\t+123", "\r\n@SUMA(1;1)" })
+{
+    var changed = bfsk with { Id = dangerous, PairId = dangerous, SourceDescription = dangerous,
+        AmplitudeDescription = dangerous, Channels = bfsk.Channels.Select(c => c with
+        { Channel = dangerous, ExpectedMessage = dangerous, ReceivedMessage = dangerous, BerReason = dangerous }).ToArray() };
+    using var reader = new TextFieldParser(new StringReader(ComparisonHistory.ToCsv([changed])));
+    reader.SetDelimiters(";"); reader.HasFieldsEnclosedInQuotes = true;
+    var header = reader.ReadFields()!;
+    var rows = new List<string[]>();
+    while (!reader.EndOfData) rows.Add(reader.ReadFields()!);
+    Require(rows.Count == 3 && rows.All(r => r.Length == header.Length), "CSV seguro mantiene columnas y filas");
+    foreach (string column in new[] { "id", "par_id", "origen", "amplitud" })
+        Require(rows.All(r => r[Array.IndexOf(header, column)] == "'" + dangerous), "Texto peligroso protegido: " + column);
+    foreach (string column in new[] { "mensaje_esperado", "mensaje_recibido", "motivo_ber" })
+        Require(rows.Where(r => r[7] != "TOTAL").All(r => r[Array.IndexOf(header, column)] == "'" + dangerous), "Texto de canal protegido: " + column);
+    Require(rows.Take(2).All(r => r[7] == "'" + dangerous), "Nombre de canal importado protegido");
+    Require(rows.All(r => double.Parse(r[Array.IndexOf(header, "rms_observado")], System.Globalization.CultureInfo.InvariantCulture) == bfsk.ObservedRms), "RMS numérico intacto");
+}
+var harmless = bfsk with { Id = "áé;\"東京\nfin", SourceDescription = "" };
+using (var reader = new TextFieldParser(new StringReader(ComparisonHistory.ToCsv([harmless]))))
+{
+    reader.SetDelimiters(";"); reader.HasFieldsEnclosedInQuotes = true;
+    var header = reader.ReadFields()!; var row = reader.ReadFields()!;
+    Require(row.Length == header.Length && row[1] == harmless.Id && row[6] == "", "UTF-8, separador, comillas, salto y vacío conservados");
+}
+using (var reader = new TextFieldParser(new StringReader(ComparisonHistory.ToCsv([bfsk with { NoiseSnrDb = -3, ProcessingMilliseconds = -1 }]))))
+{
+    reader.SetDelimiters(";"); reader.HasFieldsEnclosedInQuotes = true;
+    var header = reader.ReadFields()!; var row = reader.ReadFields()!;
+    Require(row[Array.IndexOf(header, "snr_configurada_db")] == "-3" &&
+        row[Array.IndexOf(header, "procesamiento_ms")] == "-1" &&
+        double.Parse(row[Array.IndexOf(header, "duracion_transmision_s")], System.Globalization.CultureInfo.InvariantCulture) > 0,
+        "Signos numéricos y duración siguen siendo números");
+}
 string path = Path.Combine(Path.GetTempPath(), "acousticlink-comparison-check-" + Guid.NewGuid() + ".json");
 try
 {
