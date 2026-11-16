@@ -1,5 +1,15 @@
 # Estado de desarrollo de AcousticLink
 
+## Rediseño de Calibración acústica · 16-11-2026
+
+Rama `feature/wpf-calibration-experience`, HEAD inicial `5796b7e82bdfba582d1e7ccd8760063ea5838cb6`. El árbol estaba limpio antes de esta tarea; no se cambiaron rama ni algoritmos, y no se crearon commits.
+
+- **Diagnóstico previo:** la columna fija de 320 px estrechaba resultados; captura, emisión y WAV parecían acciones equivalentes; el estado de la medición competía con detalles largos; la escala y unidades de las barras no quedaban junto a los valores. En tamaños estrechos, la primera acción se ocultaba tras el desplazamiento del procedimiento.
+- **Decisión visual:** cuatro etapas visibles (preparación, referencia, prueba e interpretación), dos columnas cuando hay ancho suficiente y paneles apilados con acciones del receptor visibles en una franja al estrecharse. La referencia y la prueba tienen resúmenes independientes; RMS, dBFS, pico, duración, tasa, origen y bandas completas permanecen accesibles. El azul identifica ruido y el naranja prueba; la leyenda separa barras relativas de dB referidos a potencia digital 1. Captura, reproducción digital y WAV se explican como operaciones distintas. La prueba y el WAV esperan referencia; la emisión por sí sola no confirma recepción.
+- **Archivos:** `AcousticLink.App/MainWindow.xaml`, `AcousticLink.App/MainWindow.Calibration.cs`, `checks/VerifyCalibrationWorkspace.cs` y este documento. El check WPF usa resultados sintéticos identificados y revisa BFSK, FDM, inconcluso, WAV, invalidación y tamaños de ventana.
+- **Evidencia:** compilación y checks ejecutados en esta tarea, con salida aislada por un ejecutable abierto en la ubicación predeterminada: `VerifyAcousticCalibration`, `VerifyCalibrationWorkspace`, `VerifyAudioCapture`, `VerifyWpfDashboard`, `VerifyCompactLayout`. La revisión visual de `wpf-reviewer` observó capturas sintéticas a 1366 × 768, 1180 × 740, equivalente lógico de 125 % y ancho mínimo 820 × 600. Se corrigieron la primera acción oculta, la frase ambigua sobre el rol y un resumen de SNR no sustentado. `core-reviewer` confirmó algoritmos intactos y detectó color de éxito heredado tras invalidar o cancelar; se corrigió. Capturas: `C:\Users\licho\.codex\visualizations\2026\11\16\01a1e2d0-30a3-7e21-85cb-b9c7ecc6a88f\calibration\`.
+- **Límites:** las capturas y resultados del check son sintéticos. No hubo DPI físico al 125 % ni ensayo acústico entre dos equipos; esos resultados siguen pendientes. En ancho mínimo, los detalles de procedimiento y resultados requieren desplazamiento vertical independiente.
+
 Referencia al 15-11-2026: rama `feature/transmission-walkthrough`, HEAD inicial `5549502e64b7d15633b36d3f65669e39435f10ea`, con el recorrido didáctico en el árbol de trabajo sin commit. La evidencia de esta tarea se informa por separado de las auditorías anteriores.
 
 ## Estado funcional
