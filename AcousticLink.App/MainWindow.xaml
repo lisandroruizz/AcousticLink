@@ -12,6 +12,7 @@
         <ui:NavigationViewItem Content="Emisor" Tag="1" Icon="{ui:SymbolIcon Send24}" Click="Navigation_Click" ToolTip="Emisor"/>
         <ui:NavigationViewItem Content="Receptor" Tag="2" Icon="{ui:SymbolIcon Mic24}" Click="Navigation_Click" ToolTip="Receptor"/>
         <ui:NavigationViewItem Content="Análisis" Tag="3" Icon="{ui:SymbolIcon Search24}" Click="Navigation_Click" ToolTip="Análisis"/>
+        <ui:NavigationViewItem Content="Calibración" Tag="4" Icon="{ui:SymbolIcon Mic24}" Click="Navigation_Click" ToolTip="Calibración acústica"/>
       </ui:NavigationView.MenuItems>
       <ui:NavigationView.ContentOverlay>
     <TabControl x:Name="MainSectionsTabs" Margin="12,4,12,0" SelectionChanged="WorkspaceSection_Changed" Background="Transparent" BorderThickness="0" SelectedIndex="0">
@@ -338,6 +339,40 @@
   </TabControl>
  </Grid>
 </Grid></TabItem>
+      <TabItem Header="Calibración acústica">
+        <Grid Background="{StaticResource PageBrush}" Margin="4,2,4,4">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="8,4,14,8">
+            <TextBlock Text="CALIBRACIÓN ACÚSTICA" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <TextBlock Text="1 · Preparar ambos equipos" FontWeight="SemiBold"/>
+            <TextBlock Text="Ubique parlante y micrófono, anote su posición y mantenga volumen y ganancia constantes. Use el micrófono, no una entrada de loopback." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,8"/>
+            <TextBlock Text="Modalidad"/><ComboBox x:Name="CalibrationModeCombo" SelectedIndex="0" SelectionChanged="CalibrationMode_Changed"><ComboBoxItem Content="BFSK · canal A"/><ComboBoxItem Content="FDM · canales A y B"/></ComboBox>
+            <TextBlock Text="Identificación declarada: dispositivo, posición y ganancia" Margin="0,8,0,0"/><TextBox x:Name="CalibrationDeviceText" TextChanged="CalibrationDevice_Changed" ToolTip="Escriba el nombre del micrófono de Windows, posición y ganancia. La aplicación no verifica la identidad del dispositivo."/>
+            <TextBlock x:Name="CalibrationFrequenciesText" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,10" Text="1200 y 1900 Hz · salida digital 48 kHz"/>
+            <TextBlock Text="2 · Ruido ambiente" FontWeight="SemiBold"/>
+            <TextBlock Text="No emita ningún sonido intencional durante esta captura." Foreground="{StaticResource MutedBrush}" Margin="0,4"/>
+            <ComboBox x:Name="CalibrationNoiseDuration" SelectedIndex="0"><ComboBoxItem Content="5 s" Tag="5"/><ComboBoxItem Content="10 s" Tag="10"/><ComboBoxItem Content="20 s" Tag="20"/></ComboBox>
+            <Button x:Name="CalibrationNoiseButton" Content="Capturar referencia de ruido" Click="CalibrationNoise_Click" Style="{StaticResource Primary}" Margin="0,8,0,10"/>
+            <TextBlock Text="3 · Tonos conocidos" FontWeight="SemiBold"/>
+            <TextBlock Text="En el equipo receptor inicie la captura de 10 s. Luego, en el emisor, pulse Emitir prueba una sola vez. Los equipos no se sincronizan automáticamente." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,8"/>
+            <Button x:Name="CalibrationCaptureButton" Content="Capturar prueba · 10 s" Click="CalibrationCapture_Click" Style="{StaticResource Primary}" Margin="0,0,0,6"/>
+            <Button x:Name="CalibrationEmitButton" Content="Emitir prueba en este equipo" Click="CalibrationEmit_Click" Margin="0,0,0,6"/>
+            <Button x:Name="CalibrationWavButton" Content="Analizar WAV de prueba…" Click="CalibrationWav_Click" Margin="0,0,0,8"/>
+            <Button x:Name="CalibrationCancelButton" Content="Detener / cancelar" Click="CalibrationCancel_Click" IsEnabled="False" Margin="0,0,0,8"/>
+            <TextBlock x:Name="CalibrationDeviceState" Text="Dispositivo: inactivo" Foreground="{StaticResource MutedBrush}"/>
+          </StackPanel></ScrollViewer>
+          <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"><StackPanel Margin="8,4,8,8">
+            <TextBlock Text="4 · EVALUACIÓN DEL CANAL" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <TextBlock x:Name="CalibrationStateText" Text="Prepare el entorno y capture una referencia de ruido." TextWrapping="Wrap" Foreground="{StaticResource WarningBrush}" Margin="0,0,0,10"/>
+            <Border Style="{StaticResource OperationPanel}"><StackPanel><TextBlock Text="REFERENCIA · MICRÓFONO" FontWeight="SemiBold" Foreground="{StaticResource ChannelABrush}"/><TextBlock x:Name="CalibrationNoiseText" Text="No disponible" Margin="0,6,0,0"/></StackPanel></Border>
+            <Border Style="{StaticResource OperationPanel}"><StackPanel><TextBlock x:Name="CalibrationSignalHeading" Text="PRUEBA · PENDIENTE" FontWeight="SemiBold" Foreground="{StaticResource ChannelBBrush}"/><TextBlock x:Name="CalibrationSignalText" Text="No disponible" Margin="0,6,0,0"/></StackPanel></Border>
+            <TextBlock Text="5 · NIVELES POR FRECUENCIA" FontWeight="SemiBold" Margin="0,8,0,8"/>
+            <TextBlock Text="Barras: potencia digital relativa al tono más fuerte de esta prueba · −60 a 0 dB. SNR separada abajo." Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,0,0,8"/>
+            <StackPanel x:Name="CalibrationToneRows"/>
+            <Border Style="{StaticResource OperationPanel}" Margin="0,12,0,0"><StackPanel><TextBlock Text="LECTURA Y RECOMENDACIONES" FontWeight="SemiBold"/><TextBlock x:Name="CalibrationAdviceText" Text="La calibración caracteriza el canal; la recepción de mensajes requiere validación CRC." Margin="0,6,0,0"/></StackPanel></Border>
+          </StackPanel></ScrollViewer>
+        </Grid>
+      </TabItem>
     </TabControl>
       </ui:NavigationView.ContentOverlay>
     </ui:NavigationView>

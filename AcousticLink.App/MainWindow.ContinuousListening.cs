@@ -59,6 +59,7 @@ public partial class MainWindow
     }
     private async Task StartContinuousListeningAsync()
     {
+        if (calibrationBusy || calibrationCapture.IsRecording) { ContinuousStatusText.Text = "Detenga la calibración antes de iniciar la escucha."; return; }
         if (continuousListening is not null || capture.IsRecording || captureBusy || analyzing || closing)
         { ContinuousStatusText.Text = "Finalizá captura/análisis antes de abrir escucha continua."; return; }
         InvalidateAudioAnalysis();

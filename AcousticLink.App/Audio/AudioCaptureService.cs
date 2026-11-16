@@ -24,10 +24,11 @@ public sealed class AudioCaptureService : IAsyncDisposable
     public string FormatDescription => Volatile.Read(ref format);
     public string? Error => Volatile.Read(ref error);
 
-    public async Task StartAsync(int maximumDurationSeconds = CapturedAudio.DefaultMaximumSeconds)
+    public async Task StartAsync(int maximumDurationSeconds = CapturedAudio.DefaultMaximumSeconds,
+        CancellationToken cancellationToken = default)
     {
         CapturedAudio.ValidateDuration(maximumDurationSeconds);
-        await StartCoreAsync(maximumDurationSeconds, null);
+        await StartCoreAsync(maximumDurationSeconds, null, cancellationToken);
     }
 
     public Task StartContinuousAsync(Action<float[], int> publish, CancellationToken cancellationToken = default) =>

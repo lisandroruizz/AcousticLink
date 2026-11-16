@@ -363,6 +363,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async void StartCapture_Click(object sender, RoutedEventArgs e)
     {
+        if (calibrationBusy || calibrationCapture.IsRecording) { CaptureStatusText.Text = "Detené la calibración antes de iniciar una captura manual."; return; }
         if (continuousListening is not null) { CaptureStatusText.Text = "Detené la escucha continua antes de iniciar una captura manual."; return; }
         StartCaptureButton.IsEnabled = false;
         captureBusy = true;
@@ -1094,7 +1095,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             // DisposeAsync espera la sesión y la liberación del recorder de NAudio.
             await StopContinuousListeningAsync();
             await endingLiveReception;
-            await capture.DisposeAsync();
+            try { await capture.DisposeAsync(); }
+            finally { await calibrationCapture.DisposeAsync(); }
             if (capture.Error is not null)
                 System.Diagnostics.Trace.TraceError($"Error de captura durante el cierre: {capture.Error}");
         }
