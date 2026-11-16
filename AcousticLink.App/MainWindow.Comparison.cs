@@ -27,12 +27,14 @@ public partial class MainWindow
 
     private void ComparisonWorkspace_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        bool stacked = ComparisonWorkspace.ActualWidth < 920;
-        ComparisonWorkspace.ColumnDefinitions[0].Width = stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(300);
+        bool stacked = ComparisonWorkspace.ActualWidth < 850;
+        ComparisonWorkspace.ColumnDefinitions[0].Width = stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(320);
         ComparisonWorkspace.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         ComparisonWorkspace.RowDefinitions[0].Height = stacked ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
         ComparisonWorkspace.RowDefinitions[1].Height = stacked ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-        ComparisonSettingsScroll.MaxHeight = stacked ? 165 : double.PositiveInfinity;
+        // En el formato apilado la configuración sigue desplazable sin quedar reducida
+        // a una franja que oculte casi todos los selectores.
+        ComparisonSettingsScroll.MaxHeight = stacked ? Math.Max(210, Math.Min(300, ComparisonWorkspace.ActualHeight * 0.48)) : double.PositiveInfinity;
         Grid.SetColumn(ComparisonResultsScroll, stacked ? 0 : 1);
         Grid.SetRow(ComparisonResultsScroll, stacked ? 1 : 0);
     }
@@ -227,7 +229,7 @@ public partial class MainWindow
     private void AddBarChart(string title, (string Name, double? Value, ExperimentSource Source, ExperimentMode Mode)[] values,
         string unit, string[]? labels = null)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 10) };
+        var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 14) };
         panel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
         double observedMax = values.Where(v => v.Value.HasValue).Select(v => v.Value!.Value).DefaultIfEmpty(0).Max();
         double max = observedMax > 0 ? observedMax : 1;
@@ -236,7 +238,7 @@ public partial class MainWindow
         for (int i = 0; i < values.Length; i++)
         {
             var v = values[i];
-            var row = new Grid { Margin = new Thickness(0, 2, 0, 4) };
+            var row = new Grid { Margin = new Thickness(0, 3, 0, 6) };
             row.SetBinding(FrameworkElement.MaxWidthProperty, new Binding("ActualWidth") { Source = ComparisonResultsScroll });
             row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -245,7 +247,7 @@ public partial class MainWindow
                 TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = v.Name });
             if (v.Value.HasValue)
             {
-                var bar = new ProgressBar { Minimum = 0, Maximum = max, Value = v.Value.Value, Height = 9,
+                var bar = new ProgressBar { Minimum = 0, Maximum = max, Value = v.Value.Value, Height = 12,
                     Foreground = v.Mode == ExperimentMode.Bfsk ? Brushes.DeepSkyBlue : Brushes.MediumPurple,
                     ToolTip = $"{v.Value:0.#####} {unit}" };
                 Grid.SetRow(bar, 1);
@@ -289,7 +291,7 @@ public partial class MainWindow
                 Foreground = Brushes.LightGray };
             Canvas.SetLeft(tick, Math.Clamp(x - 13, 0, 505)); Canvas.SetTop(tick, 141); canvas.Children.Add(tick);
         }
-        panel.Children.Add(new Viewbox { Child = canvas, Stretch = Stretch.Uniform, MaxWidth = 530,
+        panel.Children.Add(new Viewbox { Child = canvas, Stretch = Stretch.Uniform, MaxWidth = 700,
             HorizontalAlignment = HorizontalAlignment.Stretch });
         ComparisonSpectrumCharts.Children.Add(panel);
     }
