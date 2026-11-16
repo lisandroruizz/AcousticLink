@@ -25,14 +25,17 @@ public sealed class ExperimentDiagnosticView : UserControl
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition()); Content = root;
         var heading = new StackPanel(); source.TextTrimming = TextTrimming.CharacterEllipsis; source.TextWrapping = TextWrapping.NoWrap;
         source.FontWeight = FontWeights.SemiBold; metadata.FontSize = 13; metadata.Foreground = (Brush)FindResource("MutedBrush");
-        states.FontSize = 13; heading.Children.Add(source); heading.Children.Add(metadata); heading.Children.Add(states); root.Children.Add(heading);
+        states.FontSize = 13; states.TextWrapping = TextWrapping.Wrap; heading.Children.Add(source); heading.Children.Add(states);
+        heading.Children.Add(new Expander { Header = "Fuente, configuración y fecha del análisis", Content = metadata }); root.Children.Add(heading);
         var tools = new WrapPanel { Margin = new Thickness(0, 8, 0, 8) };
         channels.Margin = new Thickness(0, 0, 8, 0); tools.Children.Add(channels); tools.Children.Add(modes);
         tools.Children.Add(new TextBlock { Text = "Referencias solo para medición · sin cabecera ni relleno", FontSize = 13, Margin = new Thickness(10, 8, 0, 0), Foreground = (Brush)FindResource("WarningBrush") });
         Grid.SetRow(tools, 1); root.Children.Add(tools);
-        var workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260), MinWidth = 210, MaxWidth = 360 });
+        var workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) }); workspace.ColumnDefinitions.Add(new ColumnDefinition());
-        workspace.Children.Add(new ScrollViewer { Content = properties, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        workspace.RowDefinitions.Add(new RowDefinition()); workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var propertyScroll = new ScrollViewer { Content = properties, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        workspace.Children.Add(propertyScroll);
         var splitter = new GridSplitter { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
             Background = (Brush)FindResource("LineBrush"), ResizeDirection = GridResizeDirection.Columns, ResizeBehavior = GridResizeBehavior.PreviousAndNext, ShowsPreview = true, Focusable = true };
         Grid.SetColumn(splitter, 1); workspace.Children.Add(splitter);
@@ -46,6 +49,20 @@ public sealed class ExperimentDiagnosticView : UserControl
         comparison.SelectedIndex = 0;
         comparison.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, comparison) && comparison.SelectedContent is UIElement content) WorkspaceMotion.Reveal(content); };
         Grid.SetColumn(comparison, 2); workspace.Children.Add(comparison); Grid.SetRow(workspace, 2); root.Children.Add(workspace);
+        SizeChanged += (_, _) =>
+        {
+            bool narrow = ActualWidth < 650;
+            workspace.ColumnDefinitions[0].Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(260);
+            workspace.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(6);
+            workspace.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            workspace.RowDefinitions[0].Height = narrow ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+            workspace.RowDefinitions[1].Height = narrow ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            propertyScroll.MaxHeight = narrow ? 145 : double.PositiveInfinity;
+            splitter.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+            Grid.SetColumn(comparison, narrow ? 0 : 2);
+            Grid.SetRow(comparison, narrow ? 1 : 0);
+            comparison.Margin = narrow ? new Thickness(0, 6, 0, 0) : new Thickness(10, 0, 0, 0);
+        };
         channels.SelectionChanged += (_, _) => RenderChannel(); modes.SelectionChanged += (_, _) => RenderChannel();
         distribution.PositionSelected += _ => RenderFragment(); Clear();
     }
@@ -76,7 +93,7 @@ public sealed class ExperimentDiagnosticView : UserControl
         var row = new Grid { Margin = new Thickness(0, 3, 8, 3) };
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition());
         row.Children.Add(new TextBlock { Text = name, FontSize = 13, Foreground = (Brush)FindResource("MutedBrush") });
-        var text = new TextBlock { Text = value, FontWeight = FontWeights.SemiBold, Margin = new Thickness(8, 0, 0, 0) };
+        var text = new TextBlock { Text = value, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 0, 0, 0) };
         Grid.SetColumn(text, 1); row.Children.Add(text); properties.Children.Add(row);
     }
     private void RenderChannel()
