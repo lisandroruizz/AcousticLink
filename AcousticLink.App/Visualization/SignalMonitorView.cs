@@ -70,6 +70,8 @@ public sealed class SignalMonitorView : UserControl
     private readonly ReceiverFrameStrip receptionStrip = new();
     private readonly StackPanel overviewPane = new();
     private readonly Expander overviewDetails = new() { Header = "Mapa temporal y CRC", IsExpanded = true, Margin = new Thickness(0) };
+    // En Emisor la onda y las energías ocupan primero el espacio; el mapa sigue accesible.
+    public bool GeneratedStudio { set => overviewDetails.IsExpanded = !value; }
     private bool compactOverview;
     private readonly StackPanel footer = new() { Margin = new Thickness(0, 6, 0, 0) };
     private readonly StackPanel secondaryDetails = new();
