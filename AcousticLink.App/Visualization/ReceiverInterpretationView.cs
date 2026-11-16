@@ -10,6 +10,7 @@ namespace AcousticLink.App.Visualization;
 public sealed class ReceiverInterpretationView : UserControl
 {
     private readonly ComboBox channel = new() { ItemsSource = new[] { "Canal A · 1200 / 1900 Hz", "Canal B · 3000 / 3700 Hz" }, SelectedIndex = 0 };
+    private readonly TextBlock detectorTitle = Text("2 · Decisión del detector", 16);
     public bool SingleChannel
     {
         get => channel.Visibility == Visibility.Collapsed;
@@ -54,19 +55,20 @@ public sealed class ReceiverInterpretationView : UserControl
     public ReceiverInterpretationView()
     {
         var root = new Grid { Background = new SolidColorBrush(Color.FromRgb(11, 21, 37)), Margin = new Thickness(0, 4, 0, 0) };
-        root.ColumnDefinitions.Add(new() { Width = new GridLength(.95, GridUnitType.Star), MinWidth = 180 });
-        root.ColumnDefinitions.Add(new() { Width = new GridLength(1.1, GridUnitType.Star), MinWidth = 220 });
-        root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star), MinWidth = 220 });
+        root.ColumnDefinitions.Add(new() { Width = new GridLength(.95, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new() { Width = new GridLength(1.1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var zones = new List<ScrollViewer>();
         Grid Zone(string title, int col)
         {
             var panel = new Grid { Margin = new Thickness(12, 6, 12, 8) };
             Add(panel, Text(title, 16));
             var scroll = new ScrollViewer { Content = panel, VerticalContentAlignment = VerticalAlignment.Stretch,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-            Grid.SetRow(scroll, 1); Grid.SetColumn(scroll, col); root.Children.Add(scroll); return panel;
+            Grid.SetRow(scroll, 1); Grid.SetColumn(scroll, col); root.Children.Add(scroll); zones.Add(scroll); return panel;
         }
         var navigation = new WrapPanel { Margin = new Thickness(12, 0, 12, 4) };
         channel.Width = 220; symbols.MinWidth = 60;
@@ -79,7 +81,9 @@ public sealed class ReceiverInterpretationView : UserControl
         context.FontSize = 12; window.FontSize = 12; scope.FontSize = 12;
         context.Margin = sync.Margin = window.Margin = scope.Margin = new Thickness(0, 1, 0, 1);
         Add(left, context); Add(left, sync); Add(left, localSymbols); Add(left, window); Add(left, scope); Add(left, waveform, true);
-        var center = Zone("2 · Detector BFSK", 1);
+        var center = Zone("", 1);
+        center.Children.RemoveAt(0);
+        Grid.SetRow(detectorTitle, 0); center.Children.Add(detectorTitle);
         var outcome = new Grid(); outcome.ColumnDefinitions.Add(new() { Width = new GridLength(76) }); outcome.ColumnDefinitions.Add(new());
         decision.FontSize = 46; Grid.SetColumn(reason, 1); outcome.Children.Add(decision); outcome.Children.Add(reason); Add(center, outcome);
         Add(center, energy, true); Add(center, criteria);
@@ -94,7 +98,37 @@ public sealed class ReceiverInterpretationView : UserControl
         string[] labels = ["MUESTRAS →", "ENERGÍAS →", "BIT RECIBIDO →", "HAMMING →", "CAMPO →", "CRC / UTF-8"];
         for (int i = 0; i < labels.Length; i++) { var item = new StackPanel { Margin = new Thickness(6, 2, 6, 2) }; var label = Text(labels[i], 10); label.Margin = new Thickness(0, 0, 0, 2); flowValues[i].Margin = new Thickness(0); flowValues[i].FontSize = 12; item.Children.Add(label); item.Children.Add(flowValues[i]); flow.Children.Add(item); }
         Grid.SetRow(flow, 2); Grid.SetColumnSpan(flow, 3); root.Children.Add(flow);
-        Content = root;
+        var compactHost = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        int layout = -1;
+        void Arrange(double width)
+        {
+            int nextLayout = width >= 850 && ActualHeight >= 220 ? 3 : width >= 560 ? 2 : 1;
+            if (layout == nextLayout) return;
+            layout = nextLayout;
+            if (Content is ScrollViewer) compactHost.Content = null;
+            else Content = null;
+            root.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+            root.ColumnDefinitions[1].Width = nextLayout == 1 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            root.ColumnDefinitions[2].Width = nextLayout == 3 ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            root.RowDefinitions.Clear();
+            root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            for (int i = 0; i < (nextLayout == 3 ? 1 : nextLayout == 2 ? 2 : 3); i++)
+                root.RowDefinitions.Add(new() { Height = nextLayout == 3 ? new GridLength(1, GridUnitType.Star) : new GridLength(270) });
+            root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            for (int i = 0; i < zones.Count; i++)
+            {
+                Grid.SetRow(zones[i], nextLayout == 3 ? 1 : nextLayout == 2 && i == 2 ? 2 : nextLayout == 2 ? 1 : i + 1);
+                Grid.SetColumn(zones[i], nextLayout == 3 ? i : nextLayout == 2 ? i % 2 : 0);
+                Grid.SetColumnSpan(zones[i], nextLayout == 2 && i == 2 ? 2 : 1);
+            }
+            Grid.SetRow(flow, root.RowDefinitions.Count - 1);
+            flow.Columns = nextLayout == 3 ? 6 : nextLayout == 2 ? 3 : 2;
+            if (nextLayout == 3) Content = root;
+            else { compactHost.Content = root; Content = compactHost; }
+        }
+        SizeChanged += (_, _) => Arrange(ActualWidth);
+        Arrange(900);
         previous.Click += (_, _) => NavigateRelative(-1);
         next.Click += (_, _) => NavigateRelative(1);
         firstUnknown.Click += (_, _) => NavigateRelative(1, true, true);

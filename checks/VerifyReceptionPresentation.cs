@@ -28,9 +28,11 @@ foreach (bool channelB in new[] { false, true })
     Require(invalid.IsInvalid && invalid.ValidatedText is null && invalid.CrcValid == false, "CRC incorrecto no equivale a no comprobado ni valida texto");
 }
 var live = new IncrementalFdmTextReceiver(48000, true, true);
-var partial = live.Append(samples.AsSpan(0, 48000 * 5));
+LiveFdmReception partial = default!;
+for (int offset = 0; offset < 48000 * 8; offset += 4800)
+    partial = live.Append(samples.AsSpan(offset, 4800));
 var partialActivity = ReceptionChannelActivity.From(partial.Result.ChannelA, true);
-Require(partialActivity.Stage == "Reconstruyendo datos" && partialActivity.HammingWords >= 2 && partialActivity.Percent is > 0 and < 100 && partialActivity.CrcValid is null, "Estados y Hamming durante captura, antes del bloque completo");
+Require(partialActivity.Stage == "Reconstruyendo datos" && partialActivity.HammingWords >= 2 && partialActivity.Percent is > 0 and < 100 && partialActivity.CrcValid is null, $"Estados y Hamming durante captura: {partialActivity.Stage}, palabras {partialActivity.HammingWords}, progreso {partialActivity.Percent}, CRC {partialActivity.CrcValid}");
 var stopped = live.Complete();
 Require(stopped.Result.ChannelA.State == FdmTextReceiveState.Truncated && stopped.Result.ChannelA.CrcValid is null && stopped.ObservedResult.ChannelA.Block!.Bits == partial.Result.ChannelA.Block!.Bits, "Cierre incompleto preserva observación y conserva rechazo canónico");
 Require(ReceptionChannelActivity.From(stopped.ObservedResult.ChannelA, false).Stage == "Mensaje incompleto", "Captura detenida incompleta no se representa como error confirmado");

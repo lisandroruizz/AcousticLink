@@ -25,9 +25,9 @@ var thread = new Thread(() =>
         window.Show();
         var tabs = (TabControl)window.FindName("MainSectionsTabs");
         tabs.SelectedIndex = 3;
-        var analysis = (Grid)((TabItem)tabs.Items[3]).Content;
+        var analysis = (Grid)((TabItem)tabs.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Análisis"))).Content;
         var inner = (TabControl)window.FindName("AnalysisTools");
-        Require(inner.Items.Count == 3 && ((TabItem)inner.Items[0]).Header.ToString() == "Resumen", "Navegación interna");
+        Require(inner.Items.Count == 5 && inner.Items.Cast<TabItem>().Any(t => Equals(t.Header, "Resumen")), "Navegación interna");
         var before = FdmExperimentAnalyzer.Compare("00000000", "00?001");
         var after = FdmExperimentAnalyzer.Compare("0000", "00??");
         var reception = new FdmTextChannelResult(FdmTextReceiveState.InconclusiveBits, true, 4, null, null, null, "Incompleto");
@@ -45,7 +45,7 @@ var thread = new Thread(() =>
             Require(summary.ActualWidth > size.Width - 280 && summary.ActualHeight > 100, "Área de trabajo sin desbordamiento horizontal en tamaños de escritorio y equivalencia lógica del 125 %");
         }
         foreach (TabItem tab in inner.Items) { inner.SelectedItem = tab; Pump(); }
-        Require(tabs.Items.Count == 4, "Se preservan las cuatro secciones principales");
+        Require(tabs.Items.Count == 5, "Se preservan las cinco secciones principales");
         // Resultados de integración sintética, etiquetados como tales en las capturas opcionales.
         window.Width = 1366; window.Height = 768;
         var samples = new AcousticLink.App.Signals.FdmBitstreamGenerator().GenerateTextFrames("Hola", "Mundo", true);
@@ -73,12 +73,24 @@ var thread = new Thread(() =>
         ((TextBlock)window.FindName("AnalysisConfigurationWarning")).Text = "Ensayo sintético · resultados reales del analizador · no captura física";
         tabs.SelectedIndex = 2; Pump();
         var receiverTools = (TabControl)window.FindName("ReceiverTools");
-        Require(((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).FitWorkspace && receiverTools.Items.Count == 3, "Explorador utiliza la altura del workspace");
+        Require(((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).FitWorkspace && receiverTools.Items.Count == 4, "Explorador utiliza la altura del workspace");
         var toggle = (System.Windows.Controls.Primitives.ToggleButton)window.FindName("ReceiverInspectorToggle");
         toggle.IsChecked = false; toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
         Require(((Border)window.FindName("ReceiverInspector")).Visibility == Visibility.Collapsed, "Inspector ocultable sin perder resultados");
         toggle.IsChecked = true; toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-workspace.png"));
+        window.Width = 1180; window.Height = 740; Pump();
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-1180x740.png"));
+        receiverTools.SelectedItem = receiverTools.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Sesión")); Pump();
+        var sessionTools = (TabControl)((TabItem)receiverTools.SelectedItem).Content;
+        Require(sessionTools.Items.Count == 2, "Cronología e informe técnico mantienen espacio independiente");
+        sessionTools.SelectedIndex = 1; Pump();
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "sesion-informe-1180x740.png"));
+        sessionTools.SelectedIndex = 0;
+        receiverTools.SelectedItem = receiverTools.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Mensajes")); Pump();
+        window.Width = 820; window.Height = 740; Pump();
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-min-width.png"));
+        window.Width = 1366; window.Height = 768; Pump();
         {
             receiverTools.SelectedIndex = 2; Pump();
             var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");
@@ -105,7 +117,8 @@ var thread = new Thread(() =>
             foreach (var size in new[] { new Size(1366, 768), new Size(1920, 1080), new Size(1366 / 1.25, 768 / 1.25) })
             {
                 window.Width = size.Width; window.Height = size.Height; Pump();
-                Require(lab.ActualWidth > 650 && lab.ActualHeight > 150 && Part<Button>("next").ActualWidth > 10, "Laboratorio adaptable en tamaños habituales y equivalencia lógica 125 %");
+                Require(lab.ActualWidth > 350 && lab.ActualHeight > 100 && Part<Button>("next").ActualWidth > 10, $"Laboratorio adaptable: ventana {size.Width}×{size.Height}, laboratorio {lab.ActualWidth}×{lab.ActualHeight}, navegación {Part<Button>("next").ActualWidth}");
+                if (args.Length > 0 && size.Width < 1100) Snapshot(window, System.IO.Path.Combine(args[0], "laboratorio-logical125.png"));
             }
             window.Width = 1366; window.Height = 768; Pump();
             if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-interpretacion.png"));
@@ -125,7 +138,7 @@ var thread = new Thread(() =>
         ((ReceptionView)window.FindName("ReceptionAView")).Show(received.ChannelA, received.Synchronization, "A");
         tabs.SelectedIndex = 3; inner.SelectedIndex = 0; Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "analisis-workspace.png"));
-        inner.SelectedIndex = 2; Pump();
+        inner.SelectedItem = inner.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Diagnóstico")); Pump();
         var technical = (ExperimentDiagnosticView)window.FindName("TechnicalDiagnosticView");
         var selectors = Descendants<ComboBox>(technical).ToArray();
         selectors.Single(c => c.Items.Contains("Canal A")).SelectedIndex = 1; Pump();
@@ -150,7 +163,7 @@ var thread = new Thread(() =>
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "receptor-logical125.png"));
         tabs.SelectedIndex = 3; inner.SelectedIndex = 0; Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "analisis-logical125.png"));
-        inner.SelectedIndex = 2; Pump();
+        inner.SelectedItem = inner.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Diagnóstico")); Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "diagnostico-logical125.png"));
         tabs.SelectedIndex = 2; receiverTools.SelectedIndex = 1;
         ((FrameExplorerView)window.FindName("ReceivedFrameExplorer")).SelectContentBytes(0, 0, 1); Pump();

@@ -25,7 +25,7 @@ var thread = new Thread(() =>
         Pump();
         var root = (Grid)window.Content;
         var tabs = (TabControl)window.FindName("MainSectionsTabs");
-        Require(tabs.Items.Count == 4 && tabs.SelectedIndex == 0, "Cuatro secciones, dashboard inicial");
+        Require(tabs.Items.Count == 5 && tabs.SelectedIndex == 0, "Cinco secciones, dashboard inicial");
         T Find<T>(string name) => (T)window.FindName(name);
         Require(((System.Windows.Media.FontFamily)app.FindResource("MainFont")).Source.Contains("Segoe UI") && ((System.Windows.Media.FontFamily)app.FindResource("CodeFont")).Source.Contains("Consolas"), "Fuentes compartidas y alternativas disponibles");
         foreach (string name in new[] { "UseHammingTransmitCheckBox", "UseHammingReceiveCheckBox", "ExperimentHammingCheckBox", "RecoverReceiveErasuresCheckBox", "RecoverExperimentErasuresCheckBox" })
@@ -35,7 +35,7 @@ var thread = new Thread(() =>
         }
         Require(Find<ComboBox>("FdmProfileComboBox").Style.BasedOn is not null, "Selector conserva la plantilla del tema oscuro");
         var navigation = Find<Wpf.Ui.Controls.NavigationView>("WorkspaceNavigation");
-        Require(navigation.MenuItems.Count == 4, "Navegación lateral WPF UI");
+        Require(navigation.MenuItems.Count == tabs.Items.Count, "Navegación lateral WPF UI");
         var sendItem = (Wpf.Ui.Controls.NavigationViewItem)navigation.MenuItems[1]!;
         sendItem.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         Require(tabs.SelectedIndex == 1 && sendItem.IsActive && Find<TextBlock>("ActiveSectionText").Text == "Emisor", "Selección lateral y encabezado real");

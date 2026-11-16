@@ -529,6 +529,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 _ => "Micrófono detenido por el dispositivo."
             };
         wasCaptureRecording = capture.IsRecording;
+        if (continuousListening is null) RefreshContinuousControls();
         if (continuousListening is null && !continuousHistorySelected && !continuousSegmentRetained) RefreshReceptionActivity();
         else if (continuousListening is not null) RefreshContinuousControls();
         RefreshManualDiagnostics();
