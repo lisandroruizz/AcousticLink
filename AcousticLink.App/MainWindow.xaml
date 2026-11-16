@@ -98,25 +98,34 @@
       </TabItem>
       <TabItem Header="Emisor">
         <Grid x:Name="TransmitterWorkspace" Background="{StaticResource PageBrush}">
-          <TabControl x:Name="TransmitterTools" Background="Transparent" BorderThickness="0">
+          <TabControl x:Name="TransmitterTools" ItemContainerStyle="{StaticResource SignalStudioToolTab}" Background="Transparent" BorderThickness="0">
             <TabItem Header="Mensajes de texto">
               <Grid x:Name="TransmitPanels" Margin="8,4,8,8" SizeChanged="TransmitPanels_SizeChanged">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <StackPanel Margin="4,0,4,10">
-                  <TextBlock Text="Preparar mensaje" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
-                  <TextBlock Text="Elegí la modalidad, revisá la trama digital y transmití por la salida de audio." Style="{StaticResource Caption}"/>
-                </StackPanel>
+                <Border Style="{StaticResource SignalStudioCommandSurface}" Padding="10,6" Margin="0,0,0,6"><WrapPanel>
+                  <TextBlock Text="EMISOR · MENSAJES" Style="{StaticResource SignalStudioHeading}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                  <TextBlock Text="Mensaje → configuración → trama → señal digital → audio" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                </WrapPanel></Border>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                  <Grid x:Name="TransmitContentGrid" Margin="4,0,12,8">
+                  <Grid x:Name="TransmitContentGrid" Margin="4,0,12,4">
+                    <Grid.Resources>
+                      <Style x:Key="TransmitterStudioPanel" TargetType="Border" BasedOn="{StaticResource TransmitterPanel}">
+                        <Setter Property="Background" Value="{StaticResource ResultSurfaceBrush}"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                        <Setter Property="CornerRadius" Value="0"/>
+                        <Setter Property="Padding" Value="12,9"/>
+                        <Setter Property="Margin" Value="0,0,0,5"/>
+                      </Style>
+                    </Grid.Resources>
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="TransmitMessageColumn" Width="1.2*"/><ColumnDefinition x:Name="TransmitColumnGap" Width="14"/><ColumnDefinition x:Name="TransmitDetailsColumn" Width="*"/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <StackPanel x:Name="TransmitMessagePanel" Grid.Column="0">
-                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                      <Border Style="{StaticResource TransmitterStudioPanel}"><StackPanel>
                         <TextBlock Text="01  MODALIDAD" Style="{StaticResource TransmitterEyebrow}"/>
                         <ComboBox x:Name="TransmitModeComboBox" SelectedIndex="1" HorizontalAlignment="Stretch" SelectionChanged="TransmitMode_Changed" Margin="0,4,0,6"><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
                         <TextBlock x:Name="TransmitModeDescription" Text="Dos mensajes en canales simultáneos" Style="{StaticResource Caption}"/>
                       </StackPanel></Border>
-                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                      <Border Style="{StaticResource TransmitterStudioPanel}"><StackPanel>
                         <TextBlock Text="02  MENSAJES" Style="{StaticResource TransmitterEyebrow}"/>
                         <TextBlock Text="Hasta 8 bytes UTF-8 por canal; un carácter puede ocupar más de un byte." Style="{StaticResource Caption}" Margin="0,0,0,10"/>
                         <TextBlock Text="Canal A · 1200 / 1900 Hz" Foreground="{StaticResource ChannelABrush}" FontSize="17" FontWeight="SemiBold"/>
@@ -129,20 +138,20 @@
                           <TextBlock x:Name="TransmitBBytesText" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
                         </StackPanel>
                       </StackPanel></Border>
-                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                      <Border Style="{StaticResource TransmitterStudioPanel}"><StackPanel>
                         <TextBlock Text="EXPLORAR LA SEÑAL" Style="{StaticResource TransmitterEyebrow}"/>
                         <TextBlock Text="Preparar construye un buffer digital sin reproducir sonido. Explorar abre la última señal disponible; puede corresponder a un mensaje anterior." Style="{StaticResource Caption}" Margin="0,0,0,8"/>
                         <WrapPanel><Button Content="Preparar vista previa" Click="PrepareSignalPreview_Click" Margin="0,0,8,8"/><Button Content="Explorar última señal" Click="OpenGeneratedMonitor_Click" Margin="0,0,8,8"/><Button Content="Guardar WAV digital" Click="SaveGeneratedWav_Click" Margin="0,0,0,8" ToolTip="Exporta las muestras digitales disponibles; no graba el micrófono."/></WrapPanel>
                       </StackPanel></Border>
                     </StackPanel>
                     <StackPanel x:Name="TransmitDetailsPanel" Grid.Column="2">
-                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                      <Border Style="{StaticResource TransmitterStudioPanel}"><StackPanel>
                         <TextBlock x:Name="TransmitConfigurationTitle" Text="CONFIGURACIÓN FDM" Style="{StaticResource TransmitterEyebrow}"/>
                         <StackPanel x:Name="FdmProfilePanel"><TextBlock Text="Perfil de amplitud" Margin="0,0,0,4"/><ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" SelectionChanged="WalkthroughProfile_Changed" Margin="0,0,0,12"/></StackPanel>
                         <ui:ToggleSwitch x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed"/>
                         <TextBlock Text="Hamming corrige ciertos errores del bloque; la cabecera queda fuera. Seleccioná la misma opción en el receptor." Style="{StaticResource Caption}" Margin="0,8,0,0"/>
                       </StackPanel></Border>
-                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                      <Border Style="{StaticResource TransmitterStudioPanel}"><StackPanel>
                         <TextBlock Text="03  TRAMA CALCULADA" Style="{StaticResource TransmitterEyebrow}"/>
                         <TextBlock Text="Bytes, bits y símbolos derivados de los mensajes y opciones." Style="{StaticResource Caption}" Margin="0,0,0,8"/>
                         <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap" FontSize="13"/>
@@ -154,7 +163,7 @@
                     </StackPanel>
                   </Grid>
                 </ScrollViewer>
-                <Border Grid.Row="2" Style="{StaticResource TransmitterActionPanel}" Margin="4,8,4,0">
+                <Border Grid.Row="2" Style="{StaticResource TransmitterActionPanel}" Margin="4,4,4,0">
                   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                       <TextBlock Text="DURACIÓN DIGITAL PREVISTA" Style="{StaticResource TransmitterEyebrow}"/>
@@ -166,7 +175,7 @@
                 </Border>
               </Grid>
             </TabItem>
-            <TabItem Header="Pruebas técnicas"><TabControl Background="Transparent" BorderThickness="0"><TabItem Header="BFSK · pruebas" ToolTip="Tonos, secuencia y trama BFSK"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <TabItem Header="Pruebas técnicas"><TabControl ItemContainerStyle="{StaticResource SignalStudioToolTab}" Background="Transparent" BorderThickness="0"><TabItem Header="BFSK · pruebas" ToolTip="Tonos, secuencia y trama BFSK"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="8,6,12,8">
                         <TextBlock Text="Laboratorio BFSK" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
                         <TextBlock Text="Pruebas independientes del envío de mensajes. Un tono aislado no es una trama." Style="{StaticResource Caption}" Margin="0,0,0,16"/>
@@ -272,12 +281,12 @@
                     </StackPanel>
                   </ScrollViewer></TabItem></TabControl></TabItem>
             <TabItem Header="Señal generada"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
-              <Border Style="{StaticResource TransmitterActionPanel}" Margin="4,0,4,8"><StackPanel>
-                <TextBlock Text="Última señal digital generada" FontSize="17" FontWeight="SemiBold"/>
-                <TextBlock Text="El monitor conserva el último buffer preparado o reproducido; puede ser anterior al mensaje actual. No mide recepción acústica." Style="{StaticResource Caption}" Margin="0,3,0,8"/>
-                <WrapPanel><Button Content="Volver a mensajes" Click="BackToTransmitMessages_Click" Margin="0,0,8,4"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Margin="0,0,8,4"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click" Margin="0,0,0,4"/></WrapPanel>
+              <Border Style="{StaticResource SignalStudioCommandSurface}" Padding="10,6" Margin="0,0,0,4"><StackPanel>
+                <TextBlock Text="SEÑAL DIGITAL GENERADA · ÚLTIMO BUFFER" Style="{StaticResource SignalStudioHeading}"/>
+                <TextBlock Text="Preparado o reproducido; puede corresponder a otra configuración. No es audio capturado." Style="{StaticResource Caption}" FontSize="11" Margin="0,2,0,4"/>
+                <WrapPanel><Button Content="Mensajes" ToolTip="Volver a mensajes" Click="BackToTransmitMessages_Click" Padding="10,5" MinHeight="32" Margin="0,0,6,2"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Padding="10,5" MinHeight="32" Margin="0,0,6,2"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click" Padding="10,5" MinHeight="32" Margin="0,0,0,2"/></WrapPanel>
               </StackPanel></Border>
-              <visual:SignalMonitorView x:Name="GeneratedSignalMonitor" Grid.Row="1"/>
+              <visual:SignalMonitorView x:Name="GeneratedSignalMonitor" GeneratedStudio="True" Grid.Row="1" HorizontalAlignment="Stretch"/>
             </Grid></TabItem>
           </TabControl>
         </Grid>

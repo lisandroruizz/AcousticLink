@@ -218,6 +218,13 @@ var thread = new Thread(() =>
             Capture("technical-fdm-frames-final.png", 1180, 740, 1, 1, 1, 3);
             Capture("technical-fdm-minimum-final.png", 820, 600, 1, 1, 1, 1);
             Capture("generated-empty.png", 1180, 740, 1, 2);
+            var generatedSamples = Enumerable.Range(0, 48000).Select(i => (float)(0.1 * Math.Sin(2 * Math.PI * 1200 * i / 48000))).ToArray();
+            var generatedCheckSignal = new AcousticLink.App.Visualization.MonitorSignal(generatedSamples, 48000,
+                AcousticLink.App.Visualization.MonitorSignalOrigin.Generated, "Señal digital sintética del check");
+            Find<AcousticLink.App.Visualization.SignalMonitorView>("GeneratedSignalMonitor").Show(
+                AcousticLink.App.Visualization.CarrierEnergyMap.Analyze(generatedCheckSignal));
+            Capture("generated-synthetic.png", 1180, 740, 1, 2);
+            Capture("generated-synthetic-minimum.png", 820, 600, 1, 2);
             tools.SelectedIndex = 0;
             Find<TextBox>("FdmTextBTextBox").Text = "ñññññ";
             Capture("fdm-invalid.png", 1180, 740, 1, 0);
