@@ -285,8 +285,10 @@
       <TabItem Header="Receptor">
 <Grid x:Name="ReceiverWorkspace" SizeChanged="ReceiverWorkspace_SizeChanged" Background="{StaticResource PageBrush}">
  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
- <StackPanel Margin="4,4,4,8">
-  <Border Style="{StaticResource ReceiverCommandSurface}" Padding="10,8" Margin="0,0,0,6"><WrapPanel>
+ <StackPanel Margin="0,0,0,4">
+  <Border Style="{StaticResource SignalStudioCommandSurface}" Padding="10,6"><StackPanel>
+   <WrapPanel><TextBlock Text="RECEPTOR" Style="{StaticResource SignalStudioHeading}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+   <ToggleButton x:Name="ReceiverInspectorToggle" Content="☷ Inspector" ToolTip="Mostrar u ocultar el inspector de recepción" AutomationProperties.Name="Inspector de recepción" IsChecked="True" Tag="Reception" Click="WorkspacePanel_Click" Padding="10,6" MinHeight="38" Margin="0,0,12,0"/>
    <StackPanel DockPanel.Dock="Left" Margin="0,0,14,0"><TextBlock Text="MODALIDAD" Style="{StaticResource ReceiverCommandLabel}"/>
   <ComboBox x:Name="ReceiverModeComboBox" SelectedIndex="1" Width="195" Margin="0,0,8,0" SelectionChanged="ReceiverMode_Changed" ToolTip="Elegí el modo de la señal capturada o importada; WAV no guarda la modalidad."><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
    </StackPanel>
@@ -297,21 +299,21 @@
   <Button x:Name="StartCaptureButton" Content="● Capturar" Padding="12,6" Margin="0,0,4,0" Click="StartCapture_Click"/>
   <Button x:Name="StopCaptureButton" Style="{StaticResource Danger}" Content="■ Detener" IsEnabled="False" Padding="12,6" Margin="0,0,8,0" Click="StopCapture_Click"/>
    </StackPanel></StackPanel>
-   <StackPanel Width="170"><TextBlock Text="ESTADO OPERATIVO" Style="{StaticResource ReceiverCommandLabel}"/><TextBlock x:Name="ContinuousOperationalText" Text="Micrófono apagado · escucha detenida" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" ToolTip="Estado de la sesión actual. La preferencia de inicio automático se configura por separado."/></StackPanel>
-  </WrapPanel></Border>
-  <Border Style="{StaticResource ReceiverCommandSurface}" Padding="10,6"><ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"><StackPanel Orientation="Horizontal">
+    <TextBlock x:Name="ContinuousOperationalText" Text="Micrófono apagado · escucha detenida" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedBrush}" ToolTip="Estado de la sesión actual. La preferencia de inicio automático se configura por separado."/>
+  </WrapPanel>
+  <Separator Margin="0,4" Background="{StaticResource LineBrush}"/>
+  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"><StackPanel Orientation="Horizontal">
    <TextBlock Text="DURACIÓN" Style="{StaticResource ReceiverCommandLabel}" VerticalAlignment="Center" Margin="0,0,6,0"/>
   <ComboBox x:Name="CaptureDurationComboBox" Style="{StaticResource InspectorSelector}" SelectedIndex="0" Width="90" Margin="0,0,12,0"><ComboBoxItem Content="10 s" Tag="10"/><ComboBoxItem Content="20 s" Tag="20"/><ComboBoxItem Content="30 s" Tag="30"/></ComboBox>
   <Button x:Name="LoadWavButton"  Padding="12,6" Margin="0,0,4,0" Click="LoadWav_Click" AutomationProperties.Name="Abrir WAV" ToolTip="Importa una grabación sin modificar las muestras. Si falla, se conserva el audio anterior."><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="FolderOpen24" FontSize="16" Margin="0,0,6,0"/><TextBlock Text="Abrir WAV"/></StackPanel></Button>
   <Button x:Name="SaveCaptureButton"  IsEnabled="False" Padding="12,6" Margin="0,0,12,0" Click="SaveCapture_Click" AutomationProperties.Name="Guardar WAV" ToolTip="Guarda las muestras reales seleccionadas con su frecuencia de muestreo."><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Save24" FontSize="16" Margin="0,0,6,0"/><TextBlock Text="Guardar WAV"/></StackPanel></Button>
   <Button x:Name="ReceiveFdmTextButton"  IsEnabled="False" Style="{StaticResource Primary}" Padding="12,6" Margin="0,0,4,0" Click="ReceiveFdmText_Click" AutomationProperties.Name="Analizar grabación" ToolTip="Analiza la grabación finalizada. No realiza recepción continua en tiempo real."><StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Search24" FontSize="16" Margin="0,0,6,0"/><TextBlock Text="Analizar grabación"/></StackPanel></Button>
   <Button x:Name="CancelReceiveFdmTextButton" Content="Cancelar" IsEnabled="False" Padding="12,6" Margin="0,0,8,0" Click="CancelReceiveFdmText_Click"/>
-  <ToggleButton x:Name="ReceiverInspectorToggle" Content="☷ Inspector" ToolTip="Mostrar u ocultar el inspector de recepción" AutomationProperties.Name="Inspector de recepción" IsChecked="True" Tag="Reception" Click="WorkspacePanel_Click" Padding="10,6" MinHeight="38"/>
-  </StackPanel></ScrollViewer></Border>
+  </StackPanel></ScrollViewer></StackPanel></Border>
  </StackPanel>
  <Grid Grid.Row="1">
-  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="6" x:Name="ReceiverDividerColumn"/><ColumnDefinition x:Name="ReceiverInspectorColumn" Width="280" MinWidth="240" MaxWidth="480"/></Grid.ColumnDefinitions>
-  <TabControl x:Name="ReceiverTools" ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
+  <Grid.ColumnDefinitions><ColumnDefinition MinWidth="320"/><ColumnDefinition Width="6" x:Name="ReceiverDividerColumn"/><ColumnDefinition x:Name="ReceiverInspectorColumn" Width="320" MinWidth="240" MaxWidth="480"/></Grid.ColumnDefinitions>
+  <TabControl x:Name="ReceiverTools" SelectedIndex="2" ItemContainerStyle="{StaticResource SignalStudioToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
    <TabItem Header="Mensajes"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,6,8,0"><Button Content="Abrir señal y detección" Click="OpenReceptionSignal_Click" HorizontalAlignment="Left" Margin="0,0,0,12"/><Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
      <StackPanel x:Name="ReceptionChannelAPanel"><TextBlock Text="CANAL A" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionAView"/></StackPanel>
      <StackPanel x:Name="ReceptionChannelBPanel" Grid.Column="2"><TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold"/><visual:ReceptionView x:Name="ReceptionBView"/></StackPanel>
@@ -320,7 +322,7 @@
       <visual:WaveformView x:Name="ReceivedWaveform" Height="180" Grid.Row="1" Margin="0,6" MinHeight="180"/>
 
     </Grid></Expander></StackPanel></ScrollViewer></TabItem>
-   <TabItem Header="Explorador de trama"><visual:FrameExplorerView x:Name="ReceivedFrameExplorer" FitWorkspace="True"/></TabItem><TabItem Header="Monitor de recepción"><visual:SignalMonitorView x:Name="ReceiverSignalMonitor" ReceiverMode="True"/></TabItem>
+   <TabItem Header="Explorador de trama"><visual:FrameExplorerView x:Name="ReceivedFrameExplorer" FitWorkspace="True"/></TabItem><TabItem Header="Señal y detección"><visual:SignalMonitorView x:Name="ReceiverSignalMonitor" ReceiverMode="True"/></TabItem>
     <TabItem Header="Sesión"><TabControl ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0">
      <TabItem Header="Actividad y cronología"><visual:ReceiverSessionDiagnosticsView x:Name="ReceiverSessionDiagnosticsView"/></TabItem>
      <TabItem Header="Informe de escucha"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12,8,12,8">
@@ -332,7 +334,9 @@
     </TabControl></TabItem>
   </TabControl>
   <GridSplitter x:Name="ReceiverInspectorSplitter" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LineBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Focusable="True"/>
-  <Border x:Name="ReceiverInspector" Grid.Column="2" Background="#101B2B" Padding="10,4"><TabControl x:Name="ReceiverInspectorTabs" ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
+  <Border x:Name="ReceiverInspector" Grid.Column="2" Background="#101A27" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0" Padding="10,4"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+   <StackPanel Margin="2,2,2,8"><TextBlock Text="INSPECTOR DE RECEPCIÓN" Style="{StaticResource SignalStudioHeading}"/><TextBlock Text="Resultado reconstruido y validación del canal seleccionado" Style="{StaticResource Caption}" FontSize="11"/><TextBlock Text="{Binding Text, ElementName=ReceivedFdmText}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,4,0,0" ToolTip="{Binding Text, ElementName=ReceivedFdmText}"/></StackPanel>
+   <TabControl x:Name="ReceiverInspectorTabs" Grid.Row="1" SelectedIndex="1" ItemContainerStyle="{StaticResource SignalStudioToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
    <TabItem Header="Opciones"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
     <CheckBox x:Name="AutoListenCheckBox" Content="Activar escucha continua al iniciar AcousticLink" Click="AutoListen_Click" Margin="0,4,0,8"/>
     <TextBlock x:Name="ContinuousStatusText" Text="Escucha continua desactivada" TextWrapping="Wrap" Margin="0,4"/>
@@ -363,7 +367,7 @@
     <TabItem x:Name="ReceptionBDetailTab" Header="B"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><visual:ReceptionInspectorView x:Name="ReceptionBInspector" Channel="B" Result="{Binding Result, ElementName=ReceptionBView}"/><Expander Header="Diagnóstico completo"><StackPanel><TextBlock Text="{Binding DiagnosticText, ElementName=ReceptionBView}"/></StackPanel></Expander><Expander Header="Resumen técnico"><TextBlock x:Name="ReceivedChannelBText" Text="Sin analizar"/></Expander></StackPanel></ScrollViewer></TabItem>
     <TabItem Header="Global"><ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock x:Name="ReceivedFdmText" Text="Sin recepción de texto."/></ScrollViewer></TabItem>
    </TabControl></TabItem>
-  </TabControl></Border>
+  </TabControl></Grid></Border>
  </Grid>
  <Grid Grid.Row="2" Margin="0,6,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
   <TextBlock x:Name="LiveCaptureText" Text="Sin captura activa" FontSize="13"/><ProgressBar x:Name="CaptureRmsBar" Grid.Column="1" Minimum="0" Maximum="1" Height="8" ToolTip="RMS acumulado real · escala 0–1"/>

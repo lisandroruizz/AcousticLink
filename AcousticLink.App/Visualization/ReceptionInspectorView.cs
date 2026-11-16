@@ -40,7 +40,7 @@ public sealed class ReceptionInspectorView : UserControl
         if (Result is not { } result)
         {
             panel.Children.Add(Text("Sin analizar", 20));
-            panel.Children.Add(Text("Capturá o abrí un WAV y presioná Recibir mensajes. Aquí aparecerá el resultado de este canal.", 13)); return;
+            panel.Children.Add(Text("Capturá o abrí un WAV y elegí Analizar grabación. Aquí aparecerá el resultado de este canal.", 13)); return;
         }
         var status = Text(ReceptionView.MessageStatus(result), 20); status.Foreground = ReceptionView.MessageColor(result); status.ToolTip = result.Reason; panel.Children.Add(status);
         if (result.State == FdmTextReceiveState.Valid && result.CrcValid == true && result.Text is not null)

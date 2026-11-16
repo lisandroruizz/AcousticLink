@@ -63,6 +63,16 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
     </Style>
+    <Style x:Key="SignalStudioCommandSurface" TargetType="Border">
+        <Setter Property="Background" Value="#101A27"/>
+        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+    <Style x:Key="SignalStudioHeading" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="#E5EDF7"/>
+    </Style>
     <Style x:Key="ReceiverCommandLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
         <Setter Property="FontSize" Value="11"/>
@@ -127,6 +137,10 @@
                 <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Selection" Property="BorderBrush" Value="#69B7FF" /><Setter TargetName="Selection" Property="BorderThickness" Value="1" /></Trigger>
             </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="SignalStudioToolTab" TargetType="TabItem" BasedOn="{StaticResource WorkspaceToolTab}">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="30"/>
     </Style>
 
     <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

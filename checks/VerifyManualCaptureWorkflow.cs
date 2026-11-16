@@ -41,6 +41,7 @@ var thread = new Thread(() =>
         var lab = (ReceiverInterpretationView)typeof(SignalMonitorView).GetField("interpretation", flags)!.GetValue(monitor)!;
         var tools = (TabControl)typeof(SignalMonitorView).GetField("signalTools", flags)!.GetValue(monitor)!; tools.SelectedIndex = 2;
         var data = new FdmBitstreamGenerator().GenerateTextFrames("Hola", "Mundo");
+        bool capturedActive = false;
         int beats = 0; var heartbeat = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) }; heartbeat.Tick += (_, _) => beats++; heartbeat.Start();
         for (int offset = 0; offset < data.Length;)
         {
@@ -51,6 +52,12 @@ var thread = new Thread(() =>
             Require(monitor.ReceptionActivity is { ProcessedSamples: 0 } && monitor.ReceivedChannelA.Count == 0 && lab.Selection is null, "Manual no sincroniza cabeceras ocultas ni mezcla estados");
             bool input = false; window.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => input = true)); Pump(Task.Delay(15));
             Require(input && ((Button)window.FindName("StopCaptureButton")).IsEnabled, "Dispatcher responde y permite detener antes del límite");
+            if (!capturedActive && args.Length > 0 && offset >= data.Length / 2)
+            {
+                tools.SelectedIndex = 0; Pump(Task.Delay(50));
+                Snapshot(window, System.IO.Path.Combine(args[0], "estudio-captura-manual-sintetica.png"));
+                tools.SelectedIndex = 2; capturedActive = true;
+            }
         }
         heartbeat.Stop(); Require(beats > 5, "Heartbeat UI durante captura manual");
         typeof(AudioCaptureService).GetField("running", flags)!.SetValue(capture, false); audio.Complete(CaptureStopReason.Manual);
@@ -61,12 +68,44 @@ var thread = new Thread(() =>
         var actual = ((ReceptionView)window.FindName("ReceptionAView")).Result!;
         var expected = new FdmTextReceiver().Receive(data, 48000);
         Require(actual.Text == "Hola" && actual.Block!.Bits == expected.ChannelA.Block!.Bits && ((ReceptionView)window.FindName("ReceptionBView")).Result?.Text == "Mundo", "Recibir mensajes conserva resultado manual anterior");
+        if (args.Length > 0)
+        {
+            tools.SelectedIndex = 0; Pump(Task.Delay(50));
+            Snapshot(window, System.IO.Path.Combine(args[0], "estudio-resultado-manual-sintetico.png"));
+            tools.SelectedIndex = 2;
+        }
         selection.ImportWav(path); var imported = selection.Current!; Call("InvalidateAudioAnalysis");
         var wav = CarrierEnergyMap.Analyze(new(imported.Audio.GetSamples(), 48000, MonitorSignalOrigin.ImportedWav, "WAV sintético") { SourceId = imported.Audio }); monitor.Show(wav);
         Call("QueueReceptionObservation", wav, imported.Audio, true); Require(monitor.ReceivedChannelA.Count == 0, "Abrir/recorrer WAV no decodifica automáticamente");
         monitor.StartInspection(); Pump(Task.Delay(120)); Require(monitor.InspectionRunning && !monitor.IsLive && monitor.CursorSeconds > 0, "Recorrer WAV permanece disponible sin captura"); monitor.StopInspection();
         Call("ReceiveFdmText_Click", window, new RoutedEventArgs()); Wait(() => !(bool)Field("analyzing"));
         monitor.SetCursor(3.25); Require(lab.Selection is not null && lab.WindowObservation?.AnalysisSampleCount == 2880, "Símbolo y ventana central coherentes después de análisis manual");
+        var bfskSamples = new BfskTextModem().Generate("Hola");
+        var bfskWav = new CapturedAudio(48000, 1);
+        bfskWav.Append(bfskSamples, bfskSamples.Length); bfskWav.Complete(CaptureStopReason.Manual); bfskWav.SaveWav(path);
+        selection.ImportWav(path);
+        ((ComboBox)window.FindName("ReceiverModeComboBox")).SelectedIndex = 0;
+        Call("RefreshCapture");
+        Call("ReceiveFdmText_Click", window, new RoutedEventArgs()); Wait(() => !(bool)Field("analyzing"));
+        Require(((ReceptionView)window.FindName("ReceptionAView")).Result?.Text == "Hola" &&
+            ((TabItem)window.FindName("ReceptionBDetailTab")).Visibility == Visibility.Collapsed, "BFSK sintético conserva resultado y un solo canal");
+        if (args.Length > 0)
+        {
+            tools.SelectedIndex = 0; Pump(Task.Delay(50));
+            Snapshot(window, System.IO.Path.Combine(args[0], "estudio-bfsk-resultado-sintetico.png"));
+        }
+        var truncated = new CapturedAudio(48000, 1);
+        int partialLength = bfskSamples.Length / 2;
+        truncated.Append(bfskSamples, partialLength); truncated.Complete(CaptureStopReason.Manual); truncated.SaveWav(path);
+        selection.ImportWav(path); Call("RefreshCapture");
+        Call("ReceiveFdmText_Click", window, new RoutedEventArgs()); Wait(() => !(bool)Field("analyzing"));
+        Require(((ReceptionView)window.FindName("ReceptionAView")).Result is { CrcValid: not true },
+            "Trama BFSK truncada no presenta CRC válido");
+        if (args.Length > 0)
+        {
+            Pump(Task.Delay(50));
+            Snapshot(window, System.IO.Path.Combine(args[0], "estudio-bfsk-inconcluso-sintetico.png"));
+        }
         typeof(AudioCaptureService).GetField("session", flags)!.SetValue(capture, Task.FromException(new InvalidOperationException("fallo de parada inyectado")));
         Pump((Task)Call("StopCaptureSafelyAsync")!);
         Require(!(bool)Field("captureBusy") && ((Button)window.FindName("StartCaptureButton")).IsEnabled && ((TextBlock)window.FindName("CaptureStatusText")).Text.Contains("fallo de parada inyectado"), "Error de parada se informa y finally restaura controles");
@@ -82,3 +121,12 @@ Console.WriteLine("Captura manual simulada: muestras/onda, heartbeat/input UI, p
 static void Wait(Func<bool> condition) { var end = DateTime.UtcNow.AddSeconds(15); while (!condition() && DateTime.UtcNow < end) Pump(Task.Delay(10)); if (!condition()) throw new TimeoutException(); }
 static void Pump(Task task) { var end = DateTime.UtcNow.AddSeconds(15); while (!task.IsCompleted && DateTime.UtcNow < end) { var frame = new DispatcherFrame(); Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false)); Dispatcher.PushFrame(frame); Thread.Sleep(1); } if (!task.IsCompleted) throw new TimeoutException(); task.GetAwaiter().GetResult(); }
 static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
+static void Snapshot(Window window, string path)
+{
+    window.UpdateLayout();
+    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+    bitmap.Render(window);
+    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+    using var file = System.IO.File.Create(path); encoder.Save(file);
+}

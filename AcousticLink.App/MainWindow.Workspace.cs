@@ -47,19 +47,36 @@ public partial class MainWindow
 
     private double receiverInspectorWidth = 280, analysisSettingsWidth = 240;
     private bool receiverNarrow;
+    private bool receiverAutoHidden;
+    private bool receiverAutoSizing;
     private void ReceiverWorkspace_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         bool narrow = e.NewSize.Width < 900;
         if (IsInitialized && narrow && !receiverNarrow)
         {
-            ReceiverInspectorToggle.IsChecked = false;
+            receiverAutoHidden = ReceiverInspectorToggle.IsChecked == true;
+            if (receiverAutoHidden)
+            {
+                receiverAutoSizing = true;
+                ReceiverInspectorToggle.IsChecked = false;
+                WorkspacePanel_Click(ReceiverInspectorToggle, new RoutedEventArgs());
+                receiverAutoSizing = false;
+            }
+        }
+        else if (IsInitialized && !narrow && receiverNarrow && receiverAutoHidden)
+        {
+            receiverAutoSizing = true;
+            ReceiverInspectorToggle.IsChecked = true;
             WorkspacePanel_Click(ReceiverInspectorToggle, new RoutedEventArgs());
+            receiverAutoSizing = false;
+            receiverAutoHidden = false;
         }
         receiverNarrow = narrow;
     }
     private void WorkspacePanel_Click(object sender, RoutedEventArgs e)
     {
         bool reception = ReferenceEquals(sender, ReceiverInspectorToggle);
+        if (reception && !receiverAutoSizing) receiverAutoHidden = false;
         bool open = reception ? ReceiverInspectorToggle.IsChecked == true : AnalysisSettingsToggle.IsChecked == true;
         var column = reception ? ReceiverInspectorColumn : AnalysisSettingsColumn;
         var divider = reception ? ReceiverDividerColumn : AnalysisDividerColumn;
