@@ -35,7 +35,7 @@ public sealed class SignalMonitorView : UserControl
     private readonly Button labFollow = new() { Content = "Pausar seguimiento / volver al vivo", Padding = new Thickness(8, 3, 8, 3), FontSize = 12 };
     private readonly ReceptionProgressView receptionProgress = new() { Compact = true, Visibility = Visibility.Collapsed };
     public ReceptionActivity? ReceptionActivity => receptionProgress.Activity;
-    public void SetReceptionActivity(ReceptionActivity activity) { receptionProgress.Show(activity); receptionProgress.Visibility = ReceiverMode ? Visibility.Visible : Visibility.Collapsed; }
+    public void SetReceptionActivity(ReceptionActivity activity) { receptionProgress.Show(activity); receptionProgress.Visibility = ReceiverMode && signalTools.SelectedIndex != 2 ? Visibility.Visible : Visibility.Collapsed; }
     public void ClearReceptionActivity() { receptionProgress.Clear(); receptionProgress.Visibility = Visibility.Collapsed; }
     private readonly TextBlock settings = Label("");
     private readonly TextBlock cursorInfo = Label("");
@@ -177,7 +177,9 @@ public sealed class SignalMonitorView : UserControl
             decisions.Text = $"Ventana exploratoria, no símbolo sincronizado · A: {Describe(value.Detection.ChannelA, false)}   |   B: {Describe(value.Detection.ChannelB, true)} · ventana {value.Start:0.000}–{value.End:0.000} s";
         };
         for (int i = 0; i < 4; i++) energyValues.Children.Add(Label(new[] { "A0 · 1200 Hz", "A1 · 1900 Hz", "B0 · 3000 Hz", "B1 · 3700 Hz" }[i] + " · sin datos"));
-        var tools = new WrapPanel { Margin = new Thickness(0, 8, 0, 4) };
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+        var toolsScroller = new ScrollViewer { Content = tools, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         tools.Children.Add(Label("Vista (s):")); tools.Children.Add(from); tools.Children.Add(to);
         void Button(string text, Action action)
         {
@@ -209,7 +211,7 @@ public sealed class SignalMonitorView : UserControl
         labFollow.Click += (_, _) => { if (FollowingCapture) SuspendFollowing(); else FollowCapture(); };
         labToolbar.Children.Add(labFollow); labReplay.Click += (_, _) => { if (InspectionRunning) StopInspection(); else StartInspection(); }; labToolbar.Children.Add(labReplay); labToolbar.Children.Add(inspectionContext);
         Grid.SetRow(labToolbar, 2); root.Children.Add(labToolbar);
-        Grid.SetRow(tools, 2); root.Children.Add(tools);
+        Grid.SetRow(toolsScroller, 2); root.Children.Add(toolsScroller);
         waveform = new SignalMonitorPlot(this, false); carriers = new SignalMonitorPlot(this, true);
         var signalPane = new Grid { MinHeight = 250 }; signalPane.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star), MinHeight = 80 }); signalPane.RowDefinitions.Add(new() { Height = new GridLength(1.3, GridUnitType.Star), MinHeight = 112 }); waveform.MinHeight = 80;
         signalPane.RowDefinitions.Add(new() { Height = GridLength.Auto }); signalPane.Children.Add(waveform); Grid.SetRow(carriers, 1); signalPane.Children.Add(carriers); Grid.SetRow(symbolStrip, 2); signalPane.Children.Add(symbolStrip);
@@ -219,7 +221,7 @@ public sealed class SignalMonitorView : UserControl
         signalTools.Items.Add(new TabItem { Header = "Cómo la interpreta", Content = interpretation });
         Grid.SetRow(signalTools, 3); Grid.SetRowSpan(signalTools, 2); root.Children.Add(signalTools);
         formation.TimeSelected += time => { SuspendFollowing(); SetCursor(time); if (time < start || time >= end) CenterAt(time); };
-        signalTools.SelectionChanged += (_, e) => { if (!ReferenceEquals(e.OriginalSource, signalTools)) return; bool lab = receiverMode && signalTools.SelectedIndex == 2; tools.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; overviewPane.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; labToolbar.Visibility = lab ? Visibility.Visible : Visibility.Collapsed; footer.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; cursorInfo.Visibility = settings.Visibility = signalTools.SelectedIndex != 0 ? Visibility.Collapsed : Visibility.Visible;  if (signalTools.SelectedIndex == 1 && map?.Signal.Origin == MonitorSignalOrigin.Generated) { if (live && FollowingCapture) ApplyFollow(); else SetWindowDuration(.01); } formation.Update(map, start, end, cursor); };
+        signalTools.SelectionChanged += (_, e) => { if (!ReferenceEquals(e.OriginalSource, signalTools)) return; bool lab = receiverMode && signalTools.SelectedIndex == 2; receptionProgress.Visibility = receiverMode && !lab && receptionProgress.Activity is not null ? Visibility.Visible : Visibility.Collapsed; toolsScroller.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; overviewPane.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; labToolbar.Visibility = lab ? Visibility.Visible : Visibility.Collapsed; footer.Visibility = lab ? Visibility.Collapsed : Visibility.Visible; cursorInfo.Visibility = settings.Visibility = signalTools.SelectedIndex != 0 ? Visibility.Collapsed : Visibility.Visible;  if (signalTools.SelectedIndex == 1 && map?.Signal.Origin == MonitorSignalOrigin.Generated) { if (live && FollowingCapture) ApplyFollow(); else SetWindowDuration(.01); } formation.Update(map, start, end, cursor); };
         navigator = new OverviewNavigator(this) { Height = 36, Margin = new Thickness(0, 3, 0, 0) }; overviewPane.Children.Add(navigator); overviewPane.Children.Add(receptionStrip); Grid.SetRow(overviewPane, 5); root.Children.Add(overviewPane);
 
         footer.Children.Add(Label("Izq: seleccionar · central / Mayús+arrastre: desplazar · Ctrl+rueda: zoom · Mayús+rueda: desplazar · doble clic: centrar")); footer.Children.Add(mode); footer.Children.Add(decisions); footer.Children.Add(cursorInfo); footer.Children.Add(energyValues); footer.Children.Add(settings); footer.Children.Add(Label("FDM: dos señales BFSK simultáneas en bandas distintas. Brillo = energía estimada; no confirma un bit válido."));

@@ -460,7 +460,9 @@ public partial class MainWindow
         ContinuousListenButton.IsEnabled = session is null ? !capture.IsRecording && !captureBusy && !analyzing : !session.Stopping && session.MicrophoneStarted;
         if (session is null)
         {
-            ContinuousOperationalText.Text = continuousLastError.Length > 0 ? "Error · micrófono apagado · puede reintentar" : "Micrófono apagado · escucha detenida";
+            ContinuousOperationalText.Text = capture.IsRecording ? "Micrófono activo · captura manual" : captureBusy ? "Micrófono · cambiando captura"
+                : continuousLastError.Length > 0 ? "Error · micrófono apagado · puede reintentar" : "Micrófono apagado · escucha detenida";
+            ContinuousOperationalText.Foreground = (System.Windows.Media.Brush)FindResource(continuousLastError.Length > 0 && !capture.IsRecording && !captureBusy ? "ErrorBrush" : capture.IsRecording ? "ChannelABrush" : "MutedBrush");
             return;
         }
         var update = Interlocked.Exchange(ref session.Latest, null);
@@ -491,6 +493,8 @@ public partial class MainWindow
             : current?.ChannelA.CrcValid == true || current?.ChannelB.CrcValid == true ? "Mensaje recibido"
             : current?.ChannelA.HeaderValid == true || current?.ChannelB.HeaderValid == true ? "Recibiendo · cabecera detectada" : "Escuchando · buscando transmisión";
         ContinuousOperationalText.Text = state;
+        ContinuousOperationalText.Foreground = (System.Windows.Media.Brush)FindResource(session.LastError.Length > 0 ? "ErrorBrush"
+            : current?.ChannelA.CrcValid == true || current?.ChannelB.CrcValid == true ? "SuccessBrush" : "ChannelABrush");
         GeneralStateText.Text = state;
         WorkspaceAudioStatusText.Text = rate > 0 ? $"Micrófono continuo · {rate:N0} Hz" : "Entrada de micrófono · iniciando";
         AudioSourceText.Text = continuousHistorySelected ? "Histórico seleccionado · escucha continúa" : "Micrófono · recepción automática";
