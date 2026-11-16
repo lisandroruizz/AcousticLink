@@ -175,8 +175,14 @@ public partial class MainWindow
 
     private async void CalibrationEmit_Click(object sender, RoutedEventArgs e)
     {
-        if (calibrationEmitting || calibrationBusy || closing) return;
+        if (closing) return;
+        if (calibrationEmitting || calibrationBusy || playing)
+        {
+            CalibrationStateText.Text = "Esperá a que termine la operación actual antes de iniciar la prueba.";
+            return;
+        }
         calibrationEmitting = true;
+        SetPlaybackControls(false);
         CalibrationEmitButton.IsEnabled = false;
         CalibrationNoiseButton.IsEnabled = CalibrationCaptureButton.IsEnabled = CalibrationWavButton.IsEnabled = false;
         CalibrationCancelButton.IsEnabled = true;
@@ -196,6 +202,7 @@ public partial class MainWindow
         {
             if (ReferenceEquals(calibrationCancellation, cancellation)) calibrationCancellation = null;
             calibrationEmitting = false;
+            SetPlaybackControls(true);
             if (!closing)
             {
                 CalibrationEmitButton.IsEnabled = CalibrationNoiseButton.IsEnabled = true;

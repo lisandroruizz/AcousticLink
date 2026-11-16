@@ -108,6 +108,20 @@ try
     Require(ErrorValue("antes_incorrectos") == "1" && ErrorValue("crc") == "invalido" && ErrorValue("hamming_palabras") == "" &&
         double.Parse(ErrorValue("antes_ber"), System.Globalization.CultureInfo.GetCultureInfo("es-AR")) == 1.0 / 72,
         "CSV de error real conserva BER, denominador y modalidad sin estadísticas Hamming");
+    foreach (string dangerous in new[] { "=SUMA(1;1)", "+123", "-1+2", "@SUMA(1;1)", "  =SUMA(1;1)", "\t+123", "\n@SUMA(1;1)" })
+    {
+        var changed = direct with { AudioSource = dangerous,
+            ChannelA = direct.ChannelA with { ExpectedMessage = dangerous, Diagnostic = dangerous },
+            ChannelB = direct.ChannelB with { ExpectedMessage = dangerous, Diagnostic = dangerous } };
+        var safeRows = ParseCsv(FdmExperimentCsv.Serialize(changed));
+        Require(safeRows.Count == 3 && safeRows.All(row => row.Count == safeRows[0].Count), "CSV FDM conserva esquema");
+        foreach (string key in new[] { "origen", "mensaje_esperado", "diagnostico" })
+            Require(safeRows.Skip(1).All(row => row[safeRows[0].IndexOf(key)] == "'" + dangerous), "FDM protege " + key);
+        Require(safeRows[1][safeRows[0].IndexOf("duracion_s")] == Value(1, "duracion_s") &&
+            safeRows[1][safeRows[0].IndexOf("antes_ber")] == Value(1, "antes_ber"), "Duración y BER numéricas intactas");
+    }
+    var utfRows = ParseCsv(FdmExperimentCsv.Serialize(direct with { AudioSource = "áé;\"東京\n", ChannelA = direct.ChannelA with { Diagnostic = "" } }));
+    Require(utfRows[1][utfRows[0].IndexOf("origen")] == "áé;\"東京\n" && utfRows[1][utfRows[0].IndexOf("diagnostico")] == "", "FDM conserva UTF-8, separador, comillas, salto y vacío");
     var missingRows = ParseCsv(FdmExperimentCsv.Serialize(absent));
     Require(missingRows[1][missingRows[0].IndexOf("antes_ber")] == "" && missingRows[1][missingRows[0].IndexOf("crc")] == "no_comprobado", "CSV no inventa métricas ausentes");
 }

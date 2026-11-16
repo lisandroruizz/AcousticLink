@@ -101,7 +101,7 @@ public partial class MainWindow
         bool hamming = UseHammingTransmitCheckBox.IsChecked == true;
         UpdateBfskTextInfo();
         if (!fdmTextsValid) { FdmTextStatusText.Text = FdmTextInfoText.Text; return; }
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         FdmTextStatusText.Text = "Generando y reproduciendo trama BFSK de un canal…";
         try
         {

@@ -23,6 +23,16 @@ var thread = new Thread(() =>
         // Aislar la prueba de la preferencia personal; no escribirla ni abrir el micrófono.
         ((System.Windows.Controls.CheckBox)window.FindName("AutoListenCheckBox")).IsChecked = false;
         window.Show();
+        const System.Reflection.BindingFlags privateInstance = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var emittingField = typeof(MainWindow).GetField("calibrationEmitting", privateInstance)!;
+        var playingField = typeof(MainWindow).GetField("playing", privateInstance)!;
+        emittingField.SetValue(window, true);
+        Require(!(bool)typeof(MainWindow).GetMethod("TryStartNormalPlayback", privateInstance)!.Invoke(window, null)!, "Emisor bloquea reproducción durante calibración");
+        emittingField.SetValue(window, false);
+        playingField.SetValue(window, true);
+        typeof(MainWindow).GetMethod("CalibrationEmit_Click", privateInstance)!.Invoke(window, new object[] { window, new RoutedEventArgs() });
+        Require(!(bool)emittingField.GetValue(window)! && ((TextBlock)window.FindName("CalibrationStateText")).Text.Contains("Esperá"), "Calibración informa bloqueo durante emisión normal");
+        playingField.SetValue(window, false);
         var tabs = (TabControl)window.FindName("MainSectionsTabs");
         tabs.SelectedIndex = 3;
         var analysis = (Grid)((TabItem)tabs.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Análisis"))).Content;
@@ -174,8 +184,27 @@ var thread = new Thread(() =>
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "recorrido-workspace.png"));
         var pair = new ComparisonExperiment().RunPair("interfaz", "Hola", "Mundo", true, null, 42, AcousticLink.App.Signals.FdmAmplitudeProfile.Original);
         var history = (List<ComparisonTrial>)typeof(MainWindow).GetField("comparisonHistory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(window)!;
-        history.Add(pair.Bfsk); history.Add(pair.Fdm);
+        history.Add(pair.Bfsk with { Id = "FDM-en-ID-pero-BFSK" });
+        history.Add(pair.Fdm with { Id = "BFSK-en-ID-pero-FDM" });
+        history.Add(pair.Bfsk with { Id = "ensayo-sin-modalidad-" + new string('x', 120) });
         typeof(MainWindow).GetMethod("RefreshComparisonHistory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, null);
+        var historyList = (ListBox)window.FindName("ComparisonHistoryList");
+        historyList.SelectAll(); Pump();
+        var charts = (StackPanel)window.FindName("ComparisonCharts");
+        foreach (var (id, expected) in new[] { ("FDM-en-ID-pero-BFSK", System.Windows.Media.Brushes.DeepSkyBlue),
+            ("BFSK-en-ID-pero-FDM", System.Windows.Media.Brushes.MediumPurple),
+            (history[2].Id, System.Windows.Media.Brushes.DeepSkyBlue) })
+        {
+            var bars = charts.Children.OfType<StackPanel>().SelectMany(chart => chart.Children.OfType<Grid>())
+                .Where(row => row.Children.OfType<TextBlock>().Any(label => label.Text.StartsWith(id + " · ")))
+                .SelectMany(row => row.Children.OfType<ProgressBar>()).ToArray();
+            Require(bars.Length > 0 && bars.All(bar => Equals(bar.Foreground, expected)), "Color por modalidad real: " + id);
+        }
+        Require(charts.Children.OfType<StackPanel>().SelectMany(chart => chart.Children.OfType<Grid>())
+            .Any(row => row.Children.OfType<TextBlock>().Any(label => label.Text.Contains(history[2].Id) &&
+                label.TextTrimming == TextTrimming.CharacterEllipsis && label.TextWrapping == TextWrapping.NoWrap &&
+                label.ActualHeight < 25 && Equals(label.ToolTip, history[2].Id))),
+            "ID largo se trunca solo visualmente y conserva tooltip completo");
         inner.SelectedItem = inner.Items.Cast<TabItem>().Single(t => Equals(t.Header, "Comparación")); Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "comparacion-workspace.png"));
         window.Width = 1180; window.Height = 740; Pump();
@@ -184,6 +213,10 @@ var thread = new Thread(() =>
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "comparacion-logical125.png"));
         window.Width = 820; window.Height = 740; Pump();
         if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "comparacion-min-width.png"));
+        window.Height = 600; Pump();
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "comparacion-820x600-ids-largos.png"));
+        charts.BringIntoView(); Pump();
+        if (args.Length > 0) Snapshot(window, System.IO.Path.Combine(args[0], "comparacion-barras-ids-largos.png"));
         window.Width = 1366; window.Height = 768; Pump();
         tabs.SelectedIndex = 2; receiverTools.SelectedIndex = 0; Pump();
         var waveform = (WaveformView)window.FindName("ReceivedWaveform");

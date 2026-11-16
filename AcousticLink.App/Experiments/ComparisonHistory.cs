@@ -63,12 +63,12 @@ public static class ComparisonHistory
         if (!total && t.Mode == ExperimentMode.Bfsk && t.Source == ExperimentSource.Generated)
             channelSeconds = c!.TransmittedBits * Signals.BfskToneGenerator.DefaultBitDurationSeconds;
         double? channelRate = channelSeconds is > 0 ? usefulDelivered / channelSeconds.Value : null;
-        return Line(total ? "total" : "canal", t.Id, t.PairId ?? "", t.AtUtc.ToUniversalTime().ToString("O"),
-            t.Mode.ToString(), t.Source.ToString(), t.SourceDescription, total ? "TOTAL" : c!.Channel,
-            total ? "" : c!.ExpectedMessage, total ? "" : c!.ReceivedMessage ?? "", t.UsesHamming ? "si" : "no",
+        return Line(total ? "total" : "canal", CsvText.Safe(t.Id), CsvText.Safe(t.PairId), t.AtUtc.ToUniversalTime().ToString("O"),
+            t.Mode.ToString(), t.Source.ToString(), CsvText.Safe(t.SourceDescription), total ? "TOTAL" : CsvText.Safe(c!.Channel),
+            total ? "" : CsvText.Safe(c!.ExpectedMessage), total ? "" : CsvText.Safe(c!.ReceivedMessage), t.UsesHamming ? "si" : "no",
             t.RecoversErasures ? "si" : "no", I(t.SampleRate), N(channelSeconds), N(t.AnalyzedAudioSeconds),
             N(t.ProcessingMilliseconds), N(t.NoiseSnrDb), I(t.NoiseSeed), N(t.CleanRms), N(t.ObservedRms),
-            t.AmplitudeDescription, I(total ? t.ExpectedFrames > 0 ? usefulExpected : null : c!.ExpectedMessage.Length > 0 ? usefulExpected : null),
+            CsvText.Safe(t.AmplitudeDescription), I(total ? t.ExpectedFrames > 0 ? usefulExpected : null : c!.ExpectedMessage.Length > 0 ? usefulExpected : null),
             I(total ? t.ExpectedFrames > 0 ? usefulDelivered : null : c!.ExpectedMessage.Length > 0 ? usefulDelivered : null), I(bits > 0 ? header : null),
             I(bits > 0 ? control : null), I(bits > 0 ? hamming : null), I(bits > 0 ? padding : null),
             I(bits > 0 ? bits : null), N(total ? t.NominalAggregateBitsPerSecond : 10), N(channelRate),
@@ -79,7 +79,7 @@ public static class ComparisonHistory
             total ? "" : N(c!.BerBefore), total ? "" : N(c!.BerAfter), total ? "" : I(c!.ComparedBits),
             total ? "" : I(c!.IncorrectBits), total ? "" : I(c!.InconclusiveBits), total ? "" : I(c!.MissingBits),
             total ? "" : I(c!.HammingSyndromes), total ? "" : I(c!.HammingFlips),
-            total ? "" : I(c!.HammingRecoveredErasures), total ? "" : c!.BerReason, "",
+            total ? "" : I(c!.HammingRecoveredErasures), total ? "" : CsvText.Safe(c!.BerReason), "",
             "No disponible: no hay marcas temporales comunes entre emisión y recepción.");
     }
 

@@ -63,7 +63,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task PlayToneAsync(bool bit)
     {
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         StatusText.Text = "Reproduciendo tono...";
         try
         {
@@ -103,7 +103,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         }
 
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         StatusText.Text = framed ? "Reproduciendo trama de prueba..." : "Reproduciendo secuencia BFSK...";
         try
         {
@@ -129,7 +129,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         bool bitA = FdmBitAComboBox.SelectedIndex == 1;
         bool bitB = FdmBitBComboBox.SelectedIndex == 1;
         var profile = SelectedFdmProfile;
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         FdmStatusText.Text = $"Reproduciendo FDM A={(bitA ? 1 : 0)}, B={(bitB ? 1 : 0)}...";
         try
         {
@@ -168,7 +168,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var profile = SelectedFdmProfile;
         try { FdmBitstreamGenerator.ValidateSequences(a, b); }
         catch (ArgumentException ex) { FdmSequencesStatusText.Text = ex.Message; return; }
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         FdmSequencesStatusText.Text = "Reproduciendo secuencias FDM...";
         CancellationToken token = windowLifetime.Token;
         try
@@ -208,7 +208,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var profile = SelectedFdmProfile;
         try { FdmBitstreamGenerator.ValidateSequences(a, b); }
         catch (ArgumentException ex) { FdmFramesStatusText.Text = ex.Message; return; }
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         FdmFramesStatusText.Text = "Reproduciendo ambas tramas...";
         CancellationToken token = windowLifetime.Token;
         try
@@ -290,7 +290,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (!fdmTextsValid) { FdmTextStatusText.Text = FdmTextInfoText.Text; return; }
         try { _ = new FdmTextFrameBuilder().Build(a, b, useHamming); }
         catch (ArgumentException) { FdmTextStatusText.Text = "No se pudo preparar la trama FDM. Revisá los textos de ambos canales."; return; }
-        SetPlaybackControls(false);
+        if (!TryStartNormalPlayback()) return;
         FdmTextStatusText.Text = useHamming ? "Transmitiendo mensajes con Hamming (7,4)..." : "Transmitiendo mensajes sin Hamming...";
         CancellationToken token = windowLifetime.Token;
         try
@@ -338,9 +338,21 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private FdmAmplitudeProfile SelectedFdmProfile =>
         (FdmProfileComboBox.SelectedItem as FdmAmplitudeSetting)?.Profile ?? FdmAmplitudeProfile.Original;
 
+    private bool TryStartNormalPlayback()
+    {
+        if (playing || calibrationEmitting || closing)
+        {
+            StatusText.Text = FdmTextStatusText.Text = "Esperá a que termine la emisión actual antes de iniciar otra.";
+            return false;
+        }
+        SetPlaybackControls(false);
+        return true;
+    }
+
     private void SetPlaybackControls(bool enabled)
     {
         playing = !enabled;
+        CalibrationEmitButton.IsEnabled = enabled && !calibrationBusy && !calibrationEmitting;
         FdmProfileComboBox.IsEnabled = enabled;
         Bit0Button.IsEnabled = enabled;
         Bit1Button.IsEnabled = enabled;
