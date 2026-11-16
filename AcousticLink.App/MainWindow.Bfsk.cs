@@ -14,6 +14,7 @@ public partial class MainWindow
     private void TransmitMode_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (TransmitChannelBPanel is null || FdmTextInfoText is null) return;
+        InvalidateWalkthrough("Cambió la modalidad del emisor. Prepará un recorrido nuevo.");
         bool bfsk = IsBfskTransmit;
         TransmitChannelBPanel.Visibility = bfsk ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetColumnSpan(DashboardTransmitACard, bfsk ? 3 : 1);

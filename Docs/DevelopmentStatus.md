@@ -1,8 +1,10 @@
 # Estado de desarrollo de AcousticLink
 
-Referencia al 15-11-2026: rama `feature/acoustic-calibration`, HEAD inicial `3128f8d`, con la calibración acústica asistida en el árbol de trabajo sin commit. La evidencia de esta tarea se informa por separado de las auditorías anteriores.
+Referencia al 15-11-2026: rama `feature/transmission-walkthrough`, HEAD inicial `5549502e64b7d15633b36d3f65669e39435f10ea`, con el recorrido didáctico en el árbol de trabajo sin commit. La evidencia de esta tarea se informa por separado de las auditorías anteriores.
 
 ## Estado funcional
+
+- **Recorrido de la comunicación** en **Análisis → Recorrido**: emisor BFSK/FDM desde mensaje actual con UTF-8, trama, CRC, Hamming, relleno, símbolos y onda digital; receptor desde análisis seleccionado, resultado incremental o histórico continuo con sincronización, decisiones observadas, reconstrucción, Hamming, CRC y publicación validada. Navegación, paginación y reproducción didáctica. Sin emparejamiento automático emisor/receptor ni BER. Ver `Docs/TransmissionWalkthrough.md`.
 
 - Aplicación WPF `net10.0-windows` con generación/detección BFSK y flujo FDM de dos canales; trama, sincronización, Hamming(7,4), recuperación opcional de borrados, CRC-32 y mensajes de texto FDM.
 - Captura y reproducción mediante NAudio, importación WAV, recepción FDM manual, incremental y continua, con diagnósticos, visualizaciones de señal/decodificación y análisis experimental FDM con exportación CSV.
@@ -12,6 +14,8 @@ Referencia al 15-11-2026: rama `feature/acoustic-calibration`, HEAD inicial `312
 - **Calibración acústica**: sección independiente con referencia de ruido capturado, emisión de secuencia conocida BFSK/FDM, captura o importación WAV de prueba, energías por portadora, amplitud, SNR estimada solo cuando las condiciones son comparables y recomendaciones orientativas. No aplica ajustes al módem. Ver `Docs/AcousticCalibration.md`.
 
 ## Verificación y asuntos abiertos
+
+- Para el recorrido: `dotnet build AcousticLink.slnx --no-restore` con salida aislada aprobó con 0 errores y 0 advertencias al desactivar la auditoría NuGet inaccesible por red. Aprobaron `VerifyTransmissionWalkthrough`, `VerifyBfskTextModem`, `VerifyReceptionPresentation`, `VerifyContinuousFdm`, `VerifyComparisonExperiment`, `VerifyHamming74`, `VerifyFdmTextReceiver`, `VerifyFdmHammingReceiver`, `VerifyFrameExplorer`, `VerifyVisualizations`, `VerifyIncrementalFdmReception`, `VerifyBfskWorkspace` y `VerifyContinuousWorkspace`. `git diff --check` aprobó. `core-reviewer` detectó lecturas WPF desde un worker y riesgos de datos obsoletos; `wpf-reviewer` detectó problemas de legibilidad y espacio; se corrigieron en esta tarea. No se pudo inspeccionar un render de Recorrido a 1180 × 740, 1366 × 768 ni DPI 125 %. No hubo ensayo acústico físico.
 
 - `checks/` contiene programas de verificación C# independientes con directivas .NET 10 y referencia al proyecto WPF. Se ejecutan individualmente como aplicaciones basadas en archivo; no hay proyecto de `dotnet test`. La comparación anterior agregó `VerifyComparisonExperiment.cs`. Esta tarea agregó y aprobó `VerifyReceiverSessionDiagnostics.cs`; aprobaron además `VerifyContinuousFdm.cs`, `VerifyIncrementalFdmReception.cs`, `VerifyBfskTextModem.cs`, `VerifyContinuousProgress.cs`, `VerifyContinuousWorkspace.cs`, `VerifyManualCaptureWorkflow.cs` y `VerifyReceptionPresentation.cs`. La solución compiló sin errores ni advertencias con salida aislada; la salida predeterminada quedó bloqueada por una instancia abierta de AcousticLink. Los checks emitieron `NU1900` al no poder consultar avisos de NuGet por la red restringida. Los resultados previos de `ContinuousFdmListeningAudit.md` no sustituyen nuevas corridas tras cambios funcionales.
 - No se identificó en esta revisión documental un defecto funcional actual confirmado. La auditoría de escucha continua no pudo determinar la causa exacta del incidente acústico original de 5,58 s por falta de muestras/telemetría de ese ensayo.

@@ -26,13 +26,14 @@ public partial class MainWindow
         InternalTool_Changed(sender, e);
         if (!IsInitialized || !ReferenceEquals(e.OriginalSource, AnalysisTools)) return;
         bool comparison = (AnalysisTools.SelectedItem as TabItem)?.Header?.ToString() == "Comparación";
-        if (comparison && AnalysisSettingsToggle.IsChecked == true)
+        bool walkthrough = (AnalysisTools.SelectedItem as TabItem)?.Header?.ToString() == "Recorrido";
+        if ((comparison || walkthrough) && AnalysisSettingsToggle.IsChecked == true)
         {
             AnalysisSettingsToggle.IsChecked = false;
             WorkspacePanel_Click(AnalysisSettingsToggle, new RoutedEventArgs());
         }
-        AnalysisLegacyToolbar.Visibility = comparison ? Visibility.Collapsed : Visibility.Visible;
-        AnalysisConfigurationWarning.Visibility = comparison ? Visibility.Collapsed : Visibility.Visible;
+        AnalysisLegacyToolbar.Visibility = comparison || walkthrough ? Visibility.Collapsed : Visibility.Visible;
+        AnalysisConfigurationWarning.Visibility = comparison || walkthrough ? Visibility.Collapsed : Visibility.Visible;
         if (comparison) ComparisonSource_Changed(ComparisonSourceCombo, e);
     }
 

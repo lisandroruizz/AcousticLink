@@ -223,8 +223,10 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         finally { SetPlaybackControls(true); }
     }
 
-    private void FdmText_TextChanged(object sender, TextChangedEventArgs e) => UpdateFdmTextInfo();
-    private void HammingTransmit_Changed(object sender, RoutedEventArgs e) => UpdateFdmTextInfo();
+    private void FdmText_TextChanged(object sender, TextChangedEventArgs e)
+    { InvalidateWalkthrough("Cambió el mensaje del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); }
+    private void HammingTransmit_Changed(object sender, RoutedEventArgs e)
+    { InvalidateWalkthrough("Cambió Hamming del emisor. Prepará un recorrido nuevo."); UpdateFdmTextInfo(); }
 
     private void UpdateFdmTextInfo()
     {
@@ -408,6 +410,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     // Solo al reemplazar el audio seleccionado, no al repetir un análisis ni cambiar sus opciones.
     private void InvalidateAudioAnalysis()
     {
+        InvalidateWalkthrough("La fuente o modalidad cambió. Prepará un recorrido nuevo.");
         continuousSegmentRetained = false;
         continuousHistorySelected = false;
         ContinuousHistoryComboBox.SelectedIndex = -1;
@@ -917,6 +920,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void ShowFdmReception(FdmTextReceiveResult result, CapturedAudio recording, double? through = null)
     {
+        InvalidateWalkthrough("Hay un resultado nuevo. Elegí inspeccionar la recepción actual.");
         static string Describe(string name, FdmTextChannelResult channel)
         {
             string stats = "";

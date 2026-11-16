@@ -225,11 +225,14 @@ public partial class MainWindow
     {
         if (closing) return;
         foreach (var entry in entries)
-        { continuousHistory.Add(entry); while (continuousHistory.Count > ContinuousFdmReceiver.HistoryLimit) continuousHistory.RemoveAt(0); }
+        { continuousHistory.Add(entry); while (continuousHistory.Count > ContinuousFdmReceiver.HistoryLimit)
+            { if (ReferenceEquals(ContinuousHistoryComboBox.SelectedItem, continuousHistory[0])) InvalidateWalkthrough("El histórico seleccionado salió del historial."); continuousHistory.RemoveAt(0); } }
     }
     private async void ContinuousHistory_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (ContinuousHistoryComboBox.SelectedItem is not ContinuousReception entry) return;
+        if (ContinuousHistoryComboBox.SelectedItem is not ContinuousReception entry)
+        { InvalidateWalkthrough("No hay recepción histórica seleccionada."); return; }
+        InvalidateWalkthrough("Cambió la recepción histórica seleccionada. Prepará un recorrido nuevo.");
         continuousHistorySelected = true;
         RefreshCapture();
         try
@@ -254,6 +257,7 @@ public partial class MainWindow
     }
     private void ContinuousLive_Click(object sender, RoutedEventArgs e)
     {
+        InvalidateWalkthrough("Volviendo al audio en vivo. Seleccioná una recepción para inspeccionarla.");
         ContinuousHistoryComboBox.SelectedIndex = -1; continuousHistorySelected = false;
         ApplyReceptionModeVisual(IsBfskReceive);
         if (continuousListening is null) { InvalidateAudioAnalysis(); RefreshCapture(); }

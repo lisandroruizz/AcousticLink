@@ -113,7 +113,7 @@
                   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
                     <TextBlock x:Name="TransmitConfigurationTitle" Text="CONFIGURACIÓN FDM" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,12"/>
                     <StackPanel x:Name="FdmProfilePanel"><TextBlock Text="Perfil de amplitud"/>
-                    <ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" Margin="0,6,0,12"/></StackPanel>
+                    <ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" Margin="0,6,0,12" SelectionChanged="WalkthroughProfile_Changed"/></StackPanel>
                     <ui:ToggleSwitch x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed"/>
                     <TextBlock Text="Seleccionar el mismo modo en el receptor." FontSize="12" Foreground="#AABBD0" Margin="0,6,0,12"/>
                     <Separator Background="{StaticResource LineBrush}"/>
@@ -291,6 +291,12 @@
     <Border Grid.Column="2" Background="{StaticResource ResultSurfaceBrush}" CornerRadius="6" Padding="12,4" Margin="8,0,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><TextBlock Text="CANAL B" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold" Margin="0,2,0,6"/><visual:MetricsView Grid.Row="1" x:Name="MetricsBView"/></Grid></Border>
    </Grid></TabItem>
    <TabItem Header="Hamming"><visual:HammingTraceView x:Name="HammingWordTraceView" Margin="4,0"/></TabItem>
+   <TabItem Header="Recorrido"><Grid Margin="4,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+    <WrapPanel Margin="8,4,8,6"><Button Content="Preparar emisor actual" Click="WalkthroughTransmitter_Click" Padding="10,6" Margin="0,0,6,0"/>
+     <Button Content="Inspeccionar recepción seleccionada" Click="WalkthroughReceiver_Click" Padding="10,6" Margin="0,0,6,0"/>
+     <TextBlock Text="Emisión y recepción independientes; no hay asociación automática." VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/></WrapPanel>
+    <visual:TransmissionWalkthroughView x:Name="WalkthroughView" Grid.Row="1"/>
+   </Grid></TabItem>
    <TabItem Header="Diagnóstico"><TabControl x:Name="DiagnosticTools" ItemContainerStyle="{StaticResource WorkspaceToolTab}" Background="Transparent" BorderThickness="0" SelectionChanged="InternalTool_Changed">
  <TabItem Header="Inspector / comparador"><visual:ExperimentDiagnosticView x:Name="TechnicalDiagnosticView"/></TabItem>
  <TabItem Header="Datos brutos"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>

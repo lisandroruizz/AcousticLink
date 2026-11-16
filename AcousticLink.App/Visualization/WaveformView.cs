@@ -14,6 +14,7 @@ public sealed class WaveformView : FrameworkElement
     private double scale = 1;
     private double displayFraction = 1;
     private bool useAutoScale = true;
+    private double? selectedStart, selectedEnd;
     public double PeakAbsolute { get; private set; }
     public double VerticalLimit => scale;
     public bool UseAutoScale
@@ -22,6 +23,12 @@ public sealed class WaveformView : FrameworkElement
         set { useAutoScale = value; UpdateScale(); }
     }
     public WaveformView() { Height = 180; }
+
+    public void SetSelection(double? startSeconds, double? endSeconds)
+    {
+        selectedStart = startSeconds; selectedEnd = endSeconds;
+        InvalidateVisual();
+    }
 
     public static WaveformBucket[] Reduce(ReadOnlySpan<float> samples, int maximumBuckets = 1200)
     {
@@ -74,6 +81,13 @@ public sealed class WaveformView : FrameworkElement
         Label($"+{scale:G3}", 0, top); Label("0", 20, top + height / 2 - 8); Label($"−{scale:G3}", 0, top + height - 16);
         Label("0 s", left, 153); Label($"{duration:0.000} s", Math.Max(left, ActualWidth - 85), 153);
         dc.DrawLine(new Pen(Brushes.SlateGray, 1), new Point(left, top + height / 2), new Point(left + width, top + height / 2));
+        if (duration > 0 && selectedStart is double start && selectedEnd is double end && end > start)
+        {
+            double x0 = left + width * Math.Clamp(start / duration, 0, 1);
+            double x1 = left + width * Math.Clamp(end / duration, 0, 1);
+            dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(72, 255, 207, 94)),
+                new Pen(Brushes.Goldenrod, 1), new Rect(x0, top, Math.Max(1, x1 - x0), height));
+        }
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(105, 183, 255)), 1);
         dc.PushClip(new RectangleGeometry(new Rect(left, top, width, height)));
         for (int i = 0; i < buckets.Length; i++)
