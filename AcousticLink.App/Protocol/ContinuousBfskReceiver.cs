@@ -23,6 +23,7 @@ public sealed class ContinuousBfskReceiver : IContinuousTextReceiver
     public long ReceptionCount => nextId;
     public long EvaluatedHeaderStarts => priorSearches + reader.EvaluatedHeaderStarts
         + (nextHeader?.EvaluatedStarts ?? 0);
+    public long RearmCount { get; private set; }
     public LiveFdmReception? Current => reader.Current is { } current
         ? new(BfskPresentation.AsSingleChannel(current.Result), current.SampleCount, current.IsFinal,
             current.Result.Channel.Reason, "Sin canal B") : null;
@@ -115,6 +116,7 @@ public sealed class ContinuousBfskReceiver : IContinuousTextReceiver
 
     private void Rebase(int discard, CancellationToken token)
     {
+        RearmCount++;
         priorSearches = EvaluatedHeaderStarts;
         var rest = buffer.AsSpan(discard, count - discard).ToArray();
         origin += discard; count = rest.Length; rest.CopyTo(buffer, 0);

@@ -30,7 +30,6 @@ var thread = new Thread(() =>
         var type = typeof(MainWindow).GetNestedType("ListeningSession", f)!;
         var session = Activator.CreateInstance(type, true)!;
         typeof(MainWindow).GetField("continuousListening", f)!.SetValue(w, session);
-        var queue = (Channel<(float[] Samples, int Rate)>)type.GetField("Queue")!.GetValue(session)!;
         var worker = (Task)Call("ListenWorkerAsync", session, false, false)!;
         type.GetField("Worker")!.SetValue(session, worker);
         var capture = (AudioCaptureService)Field("capture");
@@ -46,7 +45,12 @@ var thread = new Thread(() =>
         void Feed(string a, string b)
         {
             var audio = sender.GenerateTextFrames(a, b).Concat(new float[48000]).ToArray();
-            for (int at = 0; at < audio.Length; at += 4800) Pump(queue.Writer.WriteAsync((audio.AsSpan(at, Math.Min(4800, audio.Length - at)).ToArray(), 48000)).AsTask());
+            for (int at = 0; at < audio.Length; at += 4800)
+            {
+                var chunk = audio.AsSpan(at, Math.Min(4800, audio.Length - at)).ToArray();
+                Call("EnqueueContinuousSamples", session, chunk, 48000);
+                Wait(() => (long)type.GetField("AcceptedSamples")!.GetValue(session)! - (long)type.GetField("ConsumedSamples")!.GetValue(session)! < 12 * 4800);
+            }
         }
         Feed("Hola", "Mundo"); Wait(() => history.Count == 1);
         var monitor = (SignalMonitorView)w.FindName("ReceiverSignalMonitor");
@@ -76,10 +80,9 @@ var thread = new Thread(() =>
         // Reiniciar una sesión y cerrar mientras otra petición de parada sigue pendiente.
         var restarted = Activator.CreateInstance(type, true)!;
         typeof(MainWindow).GetField("continuousListening", f)!.SetValue(w, restarted);
-        var secondQueue = (Channel<(float[] Samples, int Rate)>)type.GetField("Queue")!.GetValue(restarted)!;
         var secondWorker = (Task)Call("ListenWorkerAsync", restarted, true, true)!;
         type.GetField("Worker")!.SetValue(restarted, secondWorker);
-        Pump(secondQueue.Writer.WriteAsync((sender.GenerateTextFrames("a", "b", true)[..240000], 48000)).AsTask());
+        Call("EnqueueContinuousSamples", restarted, sender.GenerateTextFrames("a", "b", true)[..4800], 48000);
         var firstStop = (Task)Call("StopContinuousListeningAsync", false)!;
         var sameStop = (Task)Call("StopContinuousListeningAsync", false)!;
         Require(ReferenceEquals(firstStop, sameStop), "Parada concurrente comparte limpieza, no retorna prematuramente");

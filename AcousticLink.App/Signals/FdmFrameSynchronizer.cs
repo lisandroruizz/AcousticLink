@@ -117,6 +117,9 @@ public sealed class FdmFrameSynchronizer
         private readonly List<Candidate> groups = [];
         private int next, lastMatch = -1, previousCount;
         private Candidate? refinedFrom;
+        private Candidate? refiningBest;
+        private int nextFine, endFine;
+        private bool finePending;
         private FdmSynchronizationResult? cached;
         public int EvaluatedStarts { get; private set; }
         internal HeaderSearch(FdmFrameSynchronizer owner, int rate)
@@ -131,6 +134,7 @@ public sealed class FdmFrameSynchronizer
         {
             token.ThrowIfCancellationRequested();
             if (samples.Length < previousCount) throw new ArgumentException("El prefijo no puede retroceder.");
+            int addedSamples = samples.Length - previousCount;
             previousCount = samples.Length;
             int last = samples.Length - headerSamples;
             string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
@@ -154,16 +158,27 @@ public sealed class FdmFrameSynchronizer
                 return Failure("Candidata completa en evaluación temporal; cabecera todavía no confirmada.");
             var best = groups[0];
             if (!final && best == refinedFrom && cached is not null) return cached;
-            refinedFrom = best;
-            int begin = Math.Max(0, best.Position - coarse), end = Math.Min(last, best.Position + coarse);
-            for (int position = begin; ; position = Math.Min(end, position + fine))
+            if (best != refinedFrom || !finePending)
+            {
+                refinedFrom = best; refiningBest = best; cached = null;
+                nextFine = Math.Max(0, best.Position - coarse);
+                endFine = Math.Min(last, best.Position + coarse);
+                finePending = true;
+            }
+            // Conservar las mismas posiciones y criterios; repartir la grilla según el audio nuevo.
+            int budget = final ? int.MaxValue : Math.Min(12, Math.Max(1, addedSamples / Math.Max(1, rate / 200)));
+            while (finePending && budget-- > 0)
             {
                 token.ThrowIfCancellationRequested();
+                int position = nextFine;
                 var candidate = owner.Evaluate(samples, rate, position, header, token);
-                if (candidate is not null && Better(candidate, best)) best = candidate;
-                if (position == end) break;
+                EvaluatedStarts++;
+                if (candidate is not null && Better(candidate, refiningBest!)) refiningBest = candidate;
+                if (position == endFine) finePending = false;
+                else nextFine = Math.Min(endFine, position + fine);
             }
-            return cached = owner.Recover(samples, rate, best.Position, 0, token);
+            if (finePending) return Failure("Candidata completa en refinamiento temporal; cabecera todavía no confirmada.");
+            return cached = owner.Recover(samples, rate, refiningBest!.Position, 0, token);
         }
     }
 

@@ -19,6 +19,7 @@ public interface IContinuousTextReceiver
     ReadOnlyMemory<float> AvailableSamples { get; }
     long ReceptionCount { get; }
     long EvaluatedHeaderStarts { get; }
+    long RearmCount { get; }
     LiveFdmReception? Current { get; }
     event Action<ContinuousReception>? Received;
     void Append(ReadOnlySpan<float> samples, CancellationToken token = default);
@@ -50,6 +51,7 @@ public sealed class ContinuousFdmReceiver : IContinuousTextReceiver
     public int BufferedSamples => count;
     public int Capacity => buffer.Length;
     public long EvaluatedHeaderStarts => previousHeaderStarts + reader.EvaluatedHeaderStarts + (nextHeader?.EvaluatedStarts ?? 0);
+    public long RearmCount { get; private set; }
     public event Action<ContinuousReception>? Received;
     public ContinuousFdmReceiver(int sampleRate, bool useHamming = false, bool recoverErasures = false,
         Guid? sessionId = null)
@@ -115,6 +117,7 @@ public sealed class ContinuousFdmReceiver : IContinuousTextReceiver
     }
     private void Rebase(int discard, CancellationToken token)
     {
+        RearmCount++;
         previousHeaderStarts = EvaluatedHeaderStarts;
         var rest = buffer.AsSpan(discard, count - discard).ToArray();
         origin += discard; count = rest.Length; buffer = new float[rate * 30]; rest.CopyTo(buffer, 0);

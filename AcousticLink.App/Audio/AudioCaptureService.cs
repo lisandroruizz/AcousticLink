@@ -12,9 +12,10 @@ public sealed class AudioCaptureService : IAsyncDisposable
     private string? error;
     private volatile bool running;
     private bool disposed;
-    private long receivedSamples, lastBufferTimestamp;
+    private long receivedSamples, lastBufferTimestamp, emptyBuffers;
     private int actualSampleRate;
     public long ReceivedSamples => Interlocked.Read(ref receivedSamples);
+    public long EmptyBuffers => Interlocked.Read(ref emptyBuffers);
     public long LastBufferTimestamp => Interlocked.Read(ref lastBufferTimestamp);
     public int SampleRate => Volatile.Read(ref actualSampleRate);
     public bool SessionCompleted => session.IsCompleted;
@@ -46,6 +47,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
             stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             error = null;
             Interlocked.Exchange(ref receivedSamples, 0); Interlocked.Exchange(ref lastBufferTimestamp, 0);
+            Interlocked.Exchange(ref emptyBuffers, 0);
             Volatile.Write(ref actualSampleRate, 0);
             if (!maximumDurationSeconds.HasValue) Volatile.Write(ref recording, null);
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -111,6 +113,7 @@ public sealed class AudioCaptureService : IAsyncDisposable
                 var source = stream.ToSampleProvider();
                 var values = new float[(bytes.Length / waveFormat.BlockAlign) * waveFormat.Channels];
                 int read = source.Read(values.AsSpan());
+                if (read == 0) { Interlocked.Increment(ref emptyBuffers); return; }
                 Interlocked.Add(ref receivedSamples, read / waveFormat.Channels);
                 Interlocked.Exchange(ref lastBufferTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
                 if (captured is not null)

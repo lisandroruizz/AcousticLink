@@ -91,6 +91,9 @@ public sealed class BfskFrameSynchronizer
         private readonly List<(int Position, double Score)> groups = [];
         private int next, lastMatch = -1, previousCount;
         private (int Position, double Score)? refinedFrom;
+        private (int Position, double Score) refiningBest;
+        private int nextFine, endFine;
+        private bool finePending;
         private BfskSynchronizationResult? cached;
         public int EvaluatedStarts { get; private set; }
 
@@ -108,6 +111,7 @@ public sealed class BfskFrameSynchronizer
         {
             token.ThrowIfCancellationRequested();
             if (samples.Length < previousCount) throw new ArgumentException("El prefijo no puede retroceder.");
+            int addedSamples = samples.Length - previousCount;
             previousCount = samples.Length;
             int last = samples.Length - headerSamples;
             string header = BfskFrameBuilder.Preamble + BfskFrameBuilder.StartMarker;
@@ -129,16 +133,27 @@ public sealed class BfskFrameSynchronizer
                 return Failure("Candidata de cabecera todavía en evaluación temporal.");
             var best = groups[0];
             if (!final && best == refinedFrom && cached is not null) return cached;
-            refinedFrom = best;
-            int begin = Math.Max(0, best.Position - coarse), end = Math.Min(last, best.Position + coarse);
-            for (int position = begin; ; position = Math.Min(end, position + fine))
+            if (best != refinedFrom || !finePending)
+            {
+                refinedFrom = best; refiningBest = best; cached = null;
+                nextFine = Math.Max(0, best.Position - coarse);
+                endFine = Math.Min(last, best.Position + coarse);
+                finePending = true;
+            }
+            // El refinamiento es idéntico al manual, pero se reparte entre callbacks.
+            // Una evaluación por cada 5 ms nuevos: el presupuesto escala con la cadencia real.
+            int budget = final ? int.MaxValue : Math.Min(12, Math.Max(1, addedSamples / Math.Max(1, rate / 200)));
+            while (finePending && budget-- > 0)
             {
                 token.ThrowIfCancellationRequested();
+                int position = nextFine;
                 double score = owner.HeaderScore(samples, rate, position, header); EvaluatedStarts++;
-                if (score > best.Score) best = (position, score);
-                if (position == end) break;
+                if (score > refiningBest.Score) refiningBest = (position, score);
+                if (position == endFine) finePending = false;
+                else nextFine = Math.Min(endFine, position + fine);
             }
-            double start = best.Position / (double)rate;
+            if (finePending) return Failure("Candidata de cabecera en refinamiento temporal.");
+            double start = refiningBest.Position / (double)rate;
             var recovered = owner.decoder.DecodeMessageBlock(samples, rate, start, header.Length, token);
             return cached = new(true, start, recovered.Bits[..BfskFrameBuilder.Preamble.Length],
                 recovered.Bits[BfskFrameBuilder.Preamble.Length..],

@@ -30,7 +30,8 @@ var thread = new Thread(() =>
         var type = typeof(MainWindow).GetNestedType("ListeningSession", f)!;
         session = Activator.CreateInstance(type, true)!;
         typeof(MainWindow).GetField("continuousListening", f)!.SetValue(window, session);
-        var queue = (Channel<(float[] Samples, int Rate)>)type.GetField("Queue")!.GetValue(session)!;
+        var queue = type.GetField("Queue")!.GetValue(session)!;
+        int QueueCount() => (int)queue.GetType().GetProperty("Reader")!.GetValue(queue)!.GetType().GetProperty("Count")!.GetValue(queue.GetType().GetProperty("Reader")!.GetValue(queue)!)!;
         worker = (Task)typeof(MainWindow).GetMethod("ListenWorkerAsync", f)!.Invoke(window, [session, false, false])!;
         type.GetField("Worker")!.SetValue(session, worker);
         object? Call(string name, params object[] args)
@@ -41,7 +42,7 @@ var thread = new Thread(() =>
         long Counter(string name) => (long)type.GetField(name)!.GetValue(session)!;
         void Block(float[] values)
         {
-            Require(SpinWait.SpinUntil(() => queue.Reader.Count < 12, 10000), "El consumidor avanza sin Dispatcher");
+            Require(SpinWait.SpinUntil(() => QueueCount() < 12, 10000), "El consumidor avanza sin Dispatcher");
             Call("EnqueueContinuousSamples", session!, values, 48000);
         }
         void Feed(float[] audio)
@@ -100,16 +101,38 @@ var thread = new Thread(() =>
         // Productor más rápido que un consumidor detenido: error explícito, jamás pérdida silenciosa.
         session = Activator.CreateInstance(type, true)!;
         typeof(MainWindow).GetField("continuousListening", f)!.SetValue(window, session);
-        queue = (Channel<(float[] Samples, int Rate)>)type.GetField("Queue")!.GetValue(session)!;
+        queue = type.GetField("Queue")!.GetValue(session)!;
         for (int i = 0; i < 16; i++) Call("EnqueueContinuousSamples", session, silence, 48000);
+        Call("EnqueueContinuousSamples", session, Array.Empty<float>(), 48000);
+        Require(Counter("EmptyBlocks") == 1 && Counter("RejectedBlocks") == 0 && QueueCount() == 16,
+            "Un callback sin muestras no consume cola ni dispara sobrecarga");
         try { Call("EnqueueContinuousSamples", session, silence, 48000); throw new Exception("No detectó saturación"); }
         catch (InvalidOperationException) { }
-        Require(queue.Reader.Count == 16 && Counter("AcceptedSamples") == 16 * 4800 && Counter("InputSamples") == 17 * 4800 && Counter("ConsumedSamples") == 0,
+        Require(QueueCount() == 16 && Counter("AcceptedSamples") == 16 * 4800 && Counter("InputSamples") == 17 * 4800 && Counter("ConsumedSamples") == 0,
             "Captura crece, worker detenido, cola acotada y bloque rechazado contabilizado");
         Require(((CancellationTokenSource)type.GetField("Cancellation")!.GetValue(session)!).IsCancellationRequested
             && ((string)type.GetField("LastError")!.GetValue(session)!).Contains("Sobrecarga"), "Sobrecarga cancela y conserva el error");
+        var incident = type.GetField("Incident")!.GetValue(session)!;
+        Require((string)incident.GetType().GetProperty("Reason")!.GetValue(incident)! == "Cola llena (TryWrite rechazó)"
+            && (int)incident.GetType().GetProperty("BlockSamples")!.GetValue(incident)! == 4800
+            && Counter("MaxQueue") == 16, "Motivo exacto, bloque y ocupación máxima retenidos");
+        Call("EnqueueContinuousSamples", session, silence, 48000);
+        Require(ReferenceEquals(incident, type.GetField("Incident")!.GetValue(session)) && Counter("RejectedBlocks") == 2,
+            "El primer incidente permanece intacto ante callbacks posteriores");
         Pump((Task)Call("StopContinuousListeningAsync", true)!);
         Require(((TextBlock)window.FindName("ContinuousStatusText")).Text.Contains("Sobrecarga"), "La parada no oculta el error original con un mensaje de éxito");
+        Require(((TextBox)window.FindName("ContinuousDiagnosticsText")).Text.Contains("TryWrite rechazó")
+            && ((TextBox)window.FindName("ContinuousDiagnosticsText")).Text.Contains("Append receptor:"),
+            "El diagnóstico del incidente sigue disponible tras liberar la sesión");
+        session = Activator.CreateInstance(type, true)!;
+        typeof(MainWindow).GetField("continuousListening", f)!.SetValue(window, session);
+        try { Call("EnqueueContinuousSamples", session, new float[48001], 48000); throw new Exception("No rechazó paquete mayor a un segundo"); }
+        catch (InvalidOperationException) { }
+        incident = type.GetField("Incident")!.GetValue(session)!;
+        Require((string)incident.GetType().GetProperty("Reason")!.GetValue(incident)! == "Bloque superior a un segundo"
+            && (int)incident.GetType().GetProperty("BlockSamples")!.GetValue(incident)! == 48001,
+            "Bloque sobredimensionado distinguido de cola llena");
+        Pump((Task)Call("StopContinuousListeningAsync", true)!);
         session = null; // El cierre también queda cubierto por VerifyContinuousWorkspace.
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
         try { Pump(capture.StartContinuousAsync((_, _) => throw new Exception("No debe abrir dispositivo"), cancelled.Token)); throw new Exception("No canceló inicio"); }
