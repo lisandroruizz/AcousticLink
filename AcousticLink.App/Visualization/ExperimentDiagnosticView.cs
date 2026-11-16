@@ -23,18 +23,22 @@ public sealed class ExperimentDiagnosticView : UserControl
     {
         var root = new Grid(); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition()); Content = root;
-        var heading = new StackPanel(); source.TextTrimming = TextTrimming.CharacterEllipsis; source.TextWrapping = TextWrapping.NoWrap;
+        var heading = new StackPanel { Margin = new Thickness(6, 2, 6, 4) };
+        heading.Children.Add(new TextBlock { Text = "EXPERIMENTO · INSPECTOR", FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("MutedBrush") });
+        source.TextTrimming = TextTrimming.CharacterEllipsis; source.TextWrapping = TextWrapping.NoWrap;
         source.FontWeight = FontWeights.SemiBold; metadata.FontSize = 13; metadata.Foreground = (Brush)FindResource("MutedBrush");
         states.FontSize = 13; states.TextWrapping = TextWrapping.Wrap; heading.Children.Add(source); heading.Children.Add(states);
         heading.Children.Add(new Expander { Header = "Fuente, configuración y fecha del análisis", Content = metadata }); root.Children.Add(heading);
-        var tools = new WrapPanel { Margin = new Thickness(0, 8, 0, 8) };
+        var tools = new WrapPanel { Margin = new Thickness(6, 4, 6, 6) };
         channels.Margin = new Thickness(0, 0, 8, 0); tools.Children.Add(channels); tools.Children.Add(modes);
         tools.Children.Add(new TextBlock { Text = "Referencias solo para medición · sin cabecera ni relleno", FontSize = 13, Margin = new Thickness(10, 8, 0, 0), Foreground = (Brush)FindResource("WarningBrush") });
         Grid.SetRow(tools, 1); root.Children.Add(tools);
         var workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) }); workspace.ColumnDefinitions.Add(new ColumnDefinition());
         workspace.RowDefinitions.Add(new RowDefinition()); workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var propertyScroll = new ScrollViewer { Content = properties, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var propertyScroll = new ScrollViewer { Content = properties, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Background = (Brush)FindResource("ResultSurfaceBrush"), Padding = new Thickness(8, 6, 4, 6) };
         workspace.Children.Add(propertyScroll);
         var splitter = new GridSplitter { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
             Background = (Brush)FindResource("LineBrush"), ResizeDirection = GridResizeDirection.Columns, ResizeBehavior = GridResizeBehavior.PreviousAndNext, ShowsPreview = true, Focusable = true };
@@ -57,7 +61,7 @@ public sealed class ExperimentDiagnosticView : UserControl
             workspace.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             workspace.RowDefinitions[0].Height = narrow ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
             workspace.RowDefinitions[1].Height = narrow ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-            propertyScroll.MaxHeight = narrow ? 145 : double.PositiveInfinity;
+            propertyScroll.MaxHeight = narrow ? 170 : double.PositiveInfinity;
             splitter.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
             Grid.SetColumn(comparison, narrow ? 0 : 2);
             Grid.SetRow(comparison, narrow ? 1 : 0);

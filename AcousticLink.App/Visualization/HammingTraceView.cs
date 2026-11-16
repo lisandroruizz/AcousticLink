@@ -38,18 +38,20 @@ public sealed class HammingTraceView : UserControl
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition());
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var top = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var top = new DockPanel { Margin = new Thickness(0, 2, 0, 4) };
         channel.MinWidth = 140; channel.Margin = new Thickness(0, 0, 12, 0); DockPanel.SetDock(channel, Dock.Left);
         summary.TextWrapping = TextWrapping.Wrap; summary.VerticalAlignment = VerticalAlignment.Center;
         top.Children.Add(channel); top.Children.Add(summary); root.Children.Add(top);
-        var info = new StackPanel(); info.Children.Add(counters); info.Children.Add(scope); Grid.SetRow(info, 1); root.Children.Add(info);
+        var info = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        info.Children.Add(counters); info.Children.Add(scope); Grid.SetRow(info, 1); root.Children.Add(info);
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.32, GridUnitType.Star) });
         workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); workspace.ColumnDefinitions.Add(new ColumnDefinition());
         workspace.RowDefinitions.Add(new RowDefinition()); workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         ScrollViewer.SetHorizontalScrollBarVisibility(words, ScrollBarVisibility.Disabled);
         inspector.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); inspector.RowDefinitions.Add(new RowDefinition());
         inspector.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        selectedHeading.FontSize = 18; selectedHeading.TextWrapping = TextWrapping.Wrap; selectedHeading.Margin = new Thickness(0, 0, 8, 4);
+        selectedHeading.FontSize = 17; selectedHeading.FontWeight = FontWeights.SemiBold;
+        selectedHeading.TextWrapping = TextWrapping.Wrap; selectedHeading.Margin = new Thickness(0, 0, 8, 4);
         var wordToolbar = new DockPanel();
         DockPanel.SetDock(showTechnical, Dock.Right); wordToolbar.Children.Add(showTechnical); wordToolbar.Children.Add(selectedHeading);
         showTechnical.Click += (_, _) => { detailTools.SelectedIndex = showTechnical.IsChecked == true ? 1 : 0; showTechnical.Content = showTechnical.IsChecked == true ? "Volver a transformación" : "Paridad / detalle"; };
@@ -115,7 +117,7 @@ public sealed class HammingTraceView : UserControl
             if (reconstructed.Parent is Panel previous) previous.Children.Remove(reconstructed);
             if (spacious) target.Children.Add(reconstructed); else target.Children.Insert(0, reconstructed);
         }
-        detail.VerticalAlignment = spacious ? VerticalAlignment.Center : VerticalAlignment.Top;
+        detail.VerticalAlignment = VerticalAlignment.Top;
         double size = detailScroll.ActualHeight >= 190 ? 38 : 26;
         foreach (var border in bitCells.Children.OfType<Border>())
         foreach (var text in ((StackPanel)border.Child).Children.OfType<TextBlock>().Where(t => Equals(t.Tag, "symbol")))
@@ -142,7 +144,8 @@ public sealed class HammingTraceView : UserControl
         int unchanged = stats.Words.Count(w => w.HasSyndrome && w.Syndrome == 0);
         void Count(string caption, int count)
         {
-            var cell = new StackPanel { Margin = new Thickness(3, 0, 6, 6) }; cell.Children.Add(Label(count.ToString(), 26)); cell.Children.Add(Label(caption)); counters.Children.Add(cell);
+            var cell = new StackPanel { Margin = new Thickness(3, 0, 6, 3) };
+            cell.Children.Add(Label(count.ToString(), 21)); cell.Children.Add(Label(caption, 12)); counters.Children.Add(cell);
         }
         Count("Procesadas¹", stats.AnalyzedWords); Count("Sin cambios", unchanged); Count("Inversiones", stats.AppliedBitFlips);
         Count("Borrados rec.", stats.RecoveredErasures); Count("Palabras rec.", stats.ErasureRecoveredWords); Count("Irrecuperables", stats.UnrecoverableWords);

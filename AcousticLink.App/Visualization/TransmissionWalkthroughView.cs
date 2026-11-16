@@ -18,7 +18,7 @@ public sealed class TransmissionWalkthroughView : UserControl
     private readonly TextBlock count = new();
     private readonly ListBox stages = new() { MinWidth = 170 };
     private readonly ListBox items = new() { FontFamily = new FontFamily("Consolas"), FontSize = 13 };
-    private readonly WaveformView waveform = new() { Height = 130 };
+    private readonly WaveformView waveform = new() { Height = 170 };
     private readonly StackPanel graph = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBlock waveformLabel = new() { Foreground = Brushes.LightGray, TextWrapping = TextWrapping.Wrap };
     private readonly Button previous = new() { Content = "← Anterior" }, next = new() { Content = "Siguiente →" },
@@ -27,13 +27,13 @@ public sealed class TransmissionWalkthroughView : UserControl
 
     public TransmissionWalkthroughView()
     {
-        var root = new Grid { Margin = new Thickness(10) };
+        var root = new Grid { Margin = new Thickness(6, 4, 6, 4) };
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new());
         root.Children.Add(source);
-        var controls = new WrapPanel { Margin = new Thickness(0, 8, 0, 8) };
-        foreach (var button in new[] { previous, next, restart, play }) { button.Margin = new Thickness(0, 0, 6, 0); button.Padding = new Thickness(9, 5, 9, 5); controls.Children.Add(button); }
+        var controls = new WrapPanel { Margin = new Thickness(0, 4, 0, 5) };
+        foreach (var button in new[] { previous, next, restart, play }) { button.Margin = new Thickness(0, 0, 5, 0); button.Padding = new Thickness(8, 3, 8, 3); controls.Children.Add(button); }
         Grid.SetRow(controls, 1); root.Children.Add(controls);
         var content = new Grid(); content.ColumnDefinitions.Add(new() { Width = new GridLength(190) }); content.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         content.RowDefinitions.Add(new()); content.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -46,7 +46,7 @@ public sealed class TransmissionWalkthroughView : UserControl
         right.Children.Add(title); Grid.SetRow(explanation, 1); right.Children.Add(explanation);
         var list = new Grid(); list.RowDefinitions.Add(new() { Height = GridLength.Auto }); list.RowDefinitions.Add(new() { Height = GridLength.Auto });
         items.SelectionChanged += (_, _) => { if (items.SelectedItem is WalkthroughItem item) { detail.Text = $"{item.Label}\n{item.Value}\n{item.Detail}"; waveform.SetSelection(item.StartSeconds, item.EndSeconds); } };
-        items.MaxHeight = 270;
+        items.MaxHeight = 190;
         list.Children.Add(items);
         var pagination = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 5, 0, 5) };
         pagination.Children.Add(beforePage); count.Margin = new Thickness(8, 4, 8, 0); pagination.Children.Add(count); pagination.Children.Add(afterPage);
@@ -55,9 +55,9 @@ public sealed class TransmissionWalkthroughView : UserControl
             Content = new Border { Background = new SolidColorBrush(Color.FromRgb(28, 46, 67)),
                 Child = new ScrollViewer { Content = detail, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
                 CornerRadius = new CornerRadius(5), MaxHeight = 95 } };
-        Grid.SetRow(detailPanel, 3); right.Children.Add(detailPanel);
+        Grid.SetRow(detailPanel, 4); right.Children.Add(detailPanel);
         graph.Children.Add(waveformLabel); graph.Children.Add(waveform);
-        Grid.SetRow(graph, 4); right.Children.Add(graph);
+        Grid.SetRow(graph, 3); right.Children.Add(graph);
         var rightScroll = new ScrollViewer { Content = right, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Margin = new Thickness(12, 0, 0, 0) };
         right.Margin = new Thickness(0);
