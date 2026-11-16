@@ -10,8 +10,11 @@ public partial class MainWindow
 {
     private int walkthroughRequest;
 
-    private void WalkthroughProfile_Changed(object sender, SelectionChangedEventArgs e) =>
+    private void WalkthroughProfile_Changed(object sender, SelectionChangedEventArgs e)
+    {
         InvalidateWalkthrough("Cambió el perfil de amplitud. Prepará un recorrido nuevo.");
+        MarkGeneratedSignalOutdated();
+    }
 
     private async void WalkthroughTransmitter_Click(object sender, RoutedEventArgs e)
     {

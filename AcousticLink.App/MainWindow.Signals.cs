@@ -112,28 +112,38 @@ public partial class MainWindow
         catch (Exception ex) { if (!closing) { streamActive = false; streamingKey = null; DashboardSignalMonitor.Clear($"Monitor: {ex.Message}"); } }
         finally { monitorBusy = false; }
     }
+    private void BackToTransmitMessages_Click(object sender, RoutedEventArgs e) => TransmitterTools.SelectedIndex = 0;
+
     private async void PrepareSignalPreview_Click(object sender, RoutedEventArgs e)
     {
         if (preparingPreview || playing) return;
         UpdateFdmTextInfo(); if (!fdmTextsValid) { FdmTextStatusText.Text = FdmTextInfoText.Text; return; }
         string a = FdmTextATextBox.Text, b = FdmTextBTextBox.Text; bool hamming = UseHammingTransmitCheckBox.IsChecked == true; var profile = SelectedFdmProfile;
+        bool bfsk = IsBfskTransmit;
+        bool InputStillMatches() => bfsk == IsBfskTransmit && a == FdmTextATextBox.Text &&
+            (bfsk || b == FdmTextBTextBox.Text && profile == SelectedFdmProfile) &&
+            hamming == (UseHammingTransmitCheckBox.IsChecked == true);
         preparingPreview = true;
         try
         {
-            if (IsBfskTransmit)
+            if (bfsk)
             {
                 var samplesBfsk = await Task.Run(() => new BfskTextModem().Generate(a, hamming), windowLifetime.Token);
                 if (closing) return;
                 RememberBfskSignal(samplesBfsk, $"Señal BFSK digital preparada · sin reproducción · Hamming {hamming}",
                     new BfskTextModem().Build(a, hamming).FrameBits);
-                TransmitterTools.SelectedIndex = 2; FdmTextStatusText.Text = "Vista previa BFSK preparada sin reproducir sonido.";
+                TransmitterTools.SelectedIndex = 2;
+                FdmTextStatusText.Text = InputStillMatches() ? "Vista previa BFSK preparada sin reproducir sonido." :
+                    "Vista previa BFSK anterior preparada. El mensaje o sus opciones cambiaron durante la preparación.";
                 return;
             }
             var frames = new FdmTextFrameBuilder().Build(a, b, hamming);
             var samples = await Task.Run(() => fdmBitstreamGenerator.GenerateTextFrames(a, b, hamming, profile), windowLifetime.Token);
             if (closing) return;
             RememberDetailedSignal(samples, 48000, $"Señal digital preparada · sin reproducción · {FdmAmplitudeProfiles.Get(profile).Label} · Hamming {hamming}", frames.ChannelA.TransmittedBits, frames.ChannelB.TransmittedBits, profile, frames: frames);
-            TransmitterTools.SelectedIndex = 2; FdmTextStatusText.Text = "Vista previa preparada sin reproducir sonido.";
+            TransmitterTools.SelectedIndex = 2;
+            FdmTextStatusText.Text = InputStillMatches() ? "Vista previa preparada sin reproducir sonido." :
+                "Vista previa FDM anterior preparada. El mensaje o sus opciones cambiaron durante la preparación.";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!closing) FdmTextStatusText.Text = $"No se pudo preparar la vista previa: {ex.Message}"; }

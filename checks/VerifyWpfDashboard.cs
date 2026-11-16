@@ -89,9 +89,21 @@ var thread = new Thread(() =>
         Require(AcousticLink.App.Visualization.FdmTextInputValidation.Check("\uD800", "A").Error!.Contains("Unicode"), "UTF-8 estricto sin exponer parámetros internos");
         editorB.Text = "Mundo"; Pump();
         Require(!Find<TextBlock>("FdmTextInfoText").Text.Contains("Parameter"), "Sin excepciones internas en la presentación");
+        typeof(MainWindow).GetField("generatedSignal", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window,
+            new AcousticLink.App.Visualization.MonitorSignal(new float[4800], 48000,
+                AcousticLink.App.Visualization.MonitorSignalOrigin.Generated, "Vista digital anterior"));
+        editorA.Text = "Otro"; Pump();
+        Require(Find<TextBlock>("FdmTextStatusText").Text.Contains("preparación anterior"), "Edición identifica buffer digital anterior");
+        editorA.Text = "Hola"; Pump();
+        typeof(MainWindow).GetField("generatedSignal", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, null);
+        Find<TextBlock>("FdmTextStatusText").Text = "";
         window.Width = 820;
         window.Height = 600;
+        tabs.SelectedIndex = 1;
         Pump();
+        Require(Grid.GetRow(Find<StackPanel>("TransmitDetailsPanel")) == 1 &&
+            Find<Button>("TransmitFdmTextButton").ActualHeight > 0,
+            "Emisor apila configuración y conserva Transmitir al ancho mínimo");
         foreach (TabItem tab in tabs.Items)
         {
             tabs.SelectedItem = tab;
@@ -124,6 +136,40 @@ var thread = new Thread(() =>
             image.Render(window);
             var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
             using var output = System.IO.File.Create(args[0]); encoder.Save(output);
+        }
+        if (args.Length > 1)
+        {
+            System.IO.Directory.CreateDirectory(args[1]);
+            void Capture(string name, int width, int height, int mode, int tool)
+            {
+                window.Width = width; window.Height = height;
+                Find<ComboBox>("TransmitModeComboBox").SelectedIndex = mode;
+                tools.SelectedIndex = tool;
+                if (tool == 1)
+                    ((TabControl)((TabItem)tools.Items[1]).Content).SelectedIndex = mode == 0 ? 0 : 1;
+                Pump(); window.UpdateLayout();
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(window);
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var file = System.IO.File.Create(System.IO.Path.Combine(args[1], name)); png.Save(file);
+            }
+            Capture("fdm-1180.png", 1180, 740, 1, 0);
+            Capture("bfsk-1180.png", 1180, 740, 0, 0);
+            Capture("fdm-1366.png", 1366, 768, 1, 0);
+            Capture("bfsk-1366.png", 1366, 768, 0, 0);
+            Capture("fdm-125-logical.png", 1093, 614, 1, 0);
+            Capture("fdm-minimum.png", 820, 600, 1, 0);
+            Capture("technical-bfsk.png", 1180, 740, 0, 1);
+            Capture("technical-fdm.png", 1180, 740, 1, 1);
+            Capture("technical-fdm-minimum.png", 820, 600, 1, 1);
+            Capture("generated-empty.png", 1180, 740, 1, 2);
+            tools.SelectedIndex = 0;
+            Find<TextBox>("FdmTextBTextBox").Text = "ñññññ";
+            Capture("fdm-invalid.png", 1180, 740, 1, 0);
+            Find<TextBox>("FdmTextBTextBox").Text = "🎵🎵";
+            Capture("fdm-utf8.png", 1180, 740, 1, 0);
+            Find<TextBox>("FdmTextBTextBox").Text = "Mundo";
         }
         var selection = (AcousticLink.App.Audio.AudioRecordingSelection)typeof(MainWindow).GetField("audioSelection", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
         var recording = new AcousticLink.App.Audio.CapturedAudio(44100, 1);

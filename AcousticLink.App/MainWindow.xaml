@@ -81,63 +81,87 @@
         <Grid x:Name="TransmitterWorkspace" Background="{StaticResource PageBrush}">
           <TabControl x:Name="TransmitterTools" Background="Transparent" BorderThickness="0">
             <TabItem Header="Mensajes de texto">
-              <Grid x:Name="TransmitPanels" Margin="0,4,0,8">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="1.4*" MinWidth="260"/><ColumnDefinition Width="6"/><ColumnDefinition Width="*" MinWidth="240"/></Grid.ColumnDefinitions>
-                <Grid Margin="8,0,16,0">
-                  <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel>
-                      <TextBlock Text="MODALIDAD DE TRANSMISIÓN" FontSize="12" Foreground="#AABBD0" Margin="0,6,0,4"/>
-                      <ComboBox x:Name="TransmitModeComboBox" SelectedIndex="1" Width="260" HorizontalAlignment="Left" SelectionChanged="TransmitMode_Changed" Margin="0,0,0,12"><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
-                      <TextBlock Text="MENSAJES A TRANSMITIR" FontSize="12" Foreground="#AABBD0" Margin="0,6,0,12"/>
-                      <TextBlock Text="Canal A" Foreground="{StaticResource ChannelABrush}" FontSize="20" FontWeight="SemiBold"/>
-                      <TextBlock Text="1200 / 1900 Hz" Foreground="#AABBD0"/>
-                      <TextBox x:Name="FdmTextATextBox" Text="Hola" Width="420" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left" FontSize="24" Margin="0,8,0,4" TextChanged="FdmText_TextChanged"/>
-                      <TextBlock x:Name="TransmitABytesText" Foreground="#AABBD0" FontSize="12"/>
-                      <StackPanel x:Name="TransmitChannelBPanel"><Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
-                        <TextBlock Text="Canal B" Foreground="{StaticResource ChannelBBrush}" FontSize="20" FontWeight="SemiBold"/>
-                        <TextBlock Text="3000 / 3700 Hz" Foreground="#AABBD0"/>
-                        <TextBox x:Name="FdmTextBTextBox" Text="Mundo" Width="420" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left" FontSize="24" Margin="0,8,0,4" TextChanged="FdmText_TextChanged"/>
-                        <TextBlock x:Name="TransmitBBytesText" Foreground="#AABBD0" FontSize="12"/></StackPanel>
-                      <Border Background="{StaticResource ResultSurfaceBrush}" CornerRadius="6" Padding="12" Margin="0,18,0,0"><StackPanel><TextBlock Text="Vista previa de la señal emitida" FontWeight="SemiBold"/><TextBlock Text="Se conserva el buffer digital realmente preparado para reproducción. No representa una medición acústica." Foreground="{StaticResource MutedBrush}" FontSize="13" Margin="0,6,0,8"/><Button Content="Preparar vista previa" Click="PrepareSignalPreview_Click" Margin="0,0,0,6"/><Button Content="Explorar última señal generada" Click="OpenGeneratedMonitor_Click"/><Button Content="Guardar última señal generada como WAV" Click="SaveGeneratedWav_Click" Margin="0,6,0,0"/></StackPanel></Border>
+              <Grid x:Name="TransmitPanels" Margin="8,4,8,8" SizeChanged="TransmitPanels_SizeChanged">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel Margin="4,0,4,10">
+                  <TextBlock Text="Preparar mensaje" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
+                  <TextBlock Text="Elegí la modalidad, revisá la trama digital y transmití por la salida de audio." Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <Grid x:Name="TransmitContentGrid" Margin="4,0,12,8">
+                    <Grid.ColumnDefinitions><ColumnDefinition x:Name="TransmitMessageColumn" Width="1.2*"/><ColumnDefinition x:Name="TransmitColumnGap" Width="14"/><ColumnDefinition x:Name="TransmitDetailsColumn" Width="*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel x:Name="TransmitMessagePanel" Grid.Column="0">
+                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                        <TextBlock Text="01  MODALIDAD" Style="{StaticResource TransmitterEyebrow}"/>
+                        <ComboBox x:Name="TransmitModeComboBox" SelectedIndex="1" HorizontalAlignment="Stretch" SelectionChanged="TransmitMode_Changed" Margin="0,4,0,6"><ComboBoxItem Content="BFSK — Un canal"/><ComboBoxItem Content="FDM — Dos canales"/></ComboBox>
+                        <TextBlock x:Name="TransmitModeDescription" Text="Dos mensajes en canales simultáneos" Style="{StaticResource Caption}"/>
+                      </StackPanel></Border>
+                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                        <TextBlock Text="02  MENSAJES" Style="{StaticResource TransmitterEyebrow}"/>
+                        <TextBlock Text="Hasta 8 bytes UTF-8 por canal; un carácter puede ocupar más de un byte." Style="{StaticResource Caption}" Margin="0,0,0,10"/>
+                        <TextBlock Text="Canal A · 1200 / 1900 Hz" Foreground="{StaticResource ChannelABrush}" FontSize="17" FontWeight="SemiBold"/>
+                        <TextBox x:Name="FdmTextATextBox" Text="Hola" HorizontalAlignment="Stretch" FontSize="22" Margin="0,7,0,4" TextChanged="FdmText_TextChanged" AutomationProperties.Name="Mensaje canal A"/>
+                        <TextBlock x:Name="TransmitABytesText" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
+                        <StackPanel x:Name="TransmitChannelBPanel" Margin="0,14,0,0">
+                          <Separator Margin="0,0,0,12" Background="{StaticResource LineBrush}"/>
+                          <TextBlock Text="Canal B · 3000 / 3700 Hz" Foreground="{StaticResource ChannelBBrush}" FontSize="17" FontWeight="SemiBold"/>
+                          <TextBox x:Name="FdmTextBTextBox" Text="Mundo" HorizontalAlignment="Stretch" FontSize="22" Margin="0,7,0,4" TextChanged="FdmText_TextChanged" AutomationProperties.Name="Mensaje canal B"/>
+                          <TextBlock x:Name="TransmitBBytesText" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
+                        </StackPanel>
+                      </StackPanel></Border>
+                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                        <TextBlock Text="EXPLORAR LA SEÑAL" Style="{StaticResource TransmitterEyebrow}"/>
+                        <TextBlock Text="Preparar construye un buffer digital sin reproducir sonido. Explorar abre la última señal disponible; puede corresponder a un mensaje anterior." Style="{StaticResource Caption}" Margin="0,0,0,8"/>
+                        <WrapPanel><Button Content="Preparar vista previa" Click="PrepareSignalPreview_Click" Margin="0,0,8,8"/><Button Content="Explorar última señal" Click="OpenGeneratedMonitor_Click" Margin="0,0,8,8"/><Button Content="Guardar WAV digital" Click="SaveGeneratedWav_Click" Margin="0,0,0,8" ToolTip="Exporta las muestras digitales disponibles; no graba el micrófono."/></WrapPanel>
+                      </StackPanel></Border>
                     </StackPanel>
-                  </ScrollViewer>
-                  <StackPanel Grid.Row="1" Margin="0,14,0,0">
-                    <TextBlock x:Name="TransmitDurationText" FontSize="22" FontWeight="SemiBold"/>
-                    <Button x:Name="TransmitFdmTextButton" Content="Transmitir" Style="{StaticResource Primary}" FontSize="18" Padding="32,12" Margin="0,8" Click="TransmitFdmText_Click"/>
-                    <TextBlock x:Name="FdmTextStatusText" TextWrapping="Wrap"/>
-                  </StackPanel>
-                </Grid>
-                <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LineBrush}" ShowsPreview="True" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Focusable="True"/>
-                <Border Grid.Column="2" Background="#101B2B" Padding="16,8">
-                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-                    <TextBlock x:Name="TransmitConfigurationTitle" Text="CONFIGURACIÓN FDM" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                    <StackPanel x:Name="FdmProfilePanel"><TextBlock Text="Perfil de amplitud"/>
-                    <ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" Margin="0,6,0,12" SelectionChanged="WalkthroughProfile_Changed"/></StackPanel>
-                    <ui:ToggleSwitch x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed"/>
-                    <TextBlock Text="Seleccionar el mismo modo en el receptor." FontSize="12" Foreground="#AABBD0" Margin="0,6,0,12"/>
-                    <Separator Background="{StaticResource LineBrush}"/>
-                    <TextBlock Text="TRAMA Y DURACIÓN" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,6"/>
-                    <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap"/>
-                    <Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
-                    <TextBlock Text="48 kHz · mono · 0,10 s/símbolo"/>
-                    <TextBlock x:Name="TransmitModeSummaryText" Text="CRC-32 permanente · FDM de dos canales · 48 kHz · 0,10 s/símbolo" Foreground="#AABBD0" FontSize="12"/>
-                    <TextBlock x:Name="TransmitPaddingNote" Text="Cabecera sin Hamming. El relleno FDM queda fuera del CRC y del bloque protegido." Foreground="#AABBD0" FontSize="12" Margin="0,8,0,0"/>
-                  </StackPanel></ScrollViewer>
+                    <StackPanel x:Name="TransmitDetailsPanel" Grid.Column="2">
+                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                        <TextBlock x:Name="TransmitConfigurationTitle" Text="CONFIGURACIÓN FDM" Style="{StaticResource TransmitterEyebrow}"/>
+                        <StackPanel x:Name="FdmProfilePanel"><TextBlock Text="Perfil de amplitud" Margin="0,0,0,4"/><ComboBox x:Name="FdmProfileComboBox" Style="{StaticResource InspectorSelector}" SelectionChanged="WalkthroughProfile_Changed" Margin="0,0,0,12"/></StackPanel>
+                        <ui:ToggleSwitch x:Name="UseHammingTransmitCheckBox" Content="Usar Hamming (7,4)" IsChecked="False" Checked="HammingTransmit_Changed" Unchecked="HammingTransmit_Changed"/>
+                        <TextBlock Text="Hamming corrige ciertos errores del bloque; la cabecera queda fuera. Seleccioná la misma opción en el receptor." Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                      </StackPanel></Border>
+                      <Border Style="{StaticResource TransmitterPanel}"><StackPanel>
+                        <TextBlock Text="03  TRAMA CALCULADA" Style="{StaticResource TransmitterEyebrow}"/>
+                        <TextBlock Text="Bytes, bits y símbolos derivados de los mensajes y opciones." Style="{StaticResource Caption}" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="FdmTextInfoText" TextWrapping="Wrap" FontSize="13"/>
+                        <Separator Margin="0,12" Background="{StaticResource LineBrush}"/>
+                        <TextBlock x:Name="TransmitModeSummaryText" Text="CRC-32 permanente · FDM de dos canales · 48 kHz · 0,10 s/símbolo" Style="{StaticResource Caption}"/>
+                        <TextBlock x:Name="TransmitPaddingNote" Text="Cabecera sin Hamming. El relleno FDM queda fuera del CRC y del bloque protegido." Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                        <TextBlock Text="CRC-32 comprueba integridad al recibir; no corrige errores." Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                      </StackPanel></Border>
+                    </StackPanel>
+                  </Grid>
+                </ScrollViewer>
+                <Border Grid.Row="2" Style="{StaticResource TransmitterActionPanel}" Margin="4,8,4,0">
+                  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                      <TextBlock Text="DURACIÓN DIGITAL PREVISTA" Style="{StaticResource TransmitterEyebrow}"/>
+                      <TextBlock x:Name="TransmitDurationText" FontSize="20" FontWeight="SemiBold"/>
+                      <TextBlock x:Name="FdmTextStatusText" TextWrapping="Wrap" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <Button x:Name="TransmitFdmTextButton" Grid.Column="1" Content="Transmitir audio" Style="{StaticResource Primary}" FontSize="17" Padding="26,12" VerticalAlignment="Center" Click="TransmitFdmText_Click"/>
+                  </Grid>
                 </Border>
               </Grid>
             </TabItem>
-            <TabItem Header="Pruebas técnicas"><TabControl Background="Transparent" BorderThickness="0"><TabItem Header="BFSK · tonos, secuencia y trama"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <Border Padding="12">
+            <TabItem Header="Pruebas técnicas"><TabControl Background="Transparent" BorderThickness="0"><TabItem Header="BFSK · pruebas" ToolTip="Tonos, secuencia y trama BFSK"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Border Style="{StaticResource TransmitterPanel}" MaxWidth="740" HorizontalAlignment="Left">
                       <StackPanel>
-                        <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="Tonos aislados" />
+                        <TextBlock Text="Laboratorio BFSK" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
+                        <TextBlock Text="Pruebas independientes del envío de mensajes. Un tono aislado no es una trama." Style="{StaticResource Caption}" Margin="0,0,0,16"/>
+                        <TextBlock Margin="0,0,0,8" Foreground="{StaticResource ChannelABrush}" FontSize="17" FontWeight="SemiBold" Text="01  Tonos aislados" />
                         <Button x:Name="Bit0Button" Content="Reproducir bit 0 (1200 Hz)" Margin="0,0,0,12" Padding="12" Click="PlayBit0_Click" />
                         <Button x:Name="Bit1Button" Content="Reproducir bit 1 (1900 Hz)" Padding="12" Click="PlayBit1_Click" />
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Secuencia BFSK" />
+                        <Separator Margin="0,20,0,16" Background="{StaticResource LineBrush}"/>
+                        <TextBlock Margin="0,0,0,8" Foreground="{StaticResource ChannelABrush}" FontSize="17" FontWeight="SemiBold" Text="02  Secuencia BFSK" />
                         <TextBox MaxWidth="420" HorizontalAlignment="Left" x:Name="BitSequenceTextBox" Padding="8" Text="10110010" TextChanged="BitSequenceTextBox_TextChanged" />
                         <TextBlock x:Name="SequenceInfoText" Margin="0,6,0,10" Text="8 bits · duración estimada: 0,8 s" />
                         <Button x:Name="PlaySequenceButton" Content="Reproducir secuencia BFSK" Padding="12" Click="PlaySequence_Click" />
-                        <TextBlock Margin="0,16,0,8" FontWeight="SemiBold" Text="Trama de prueba · usa el mismo campo de datos (1–16 bits)" />
+                        <Separator Margin="0,20,0,16" Background="{StaticResource LineBrush}"/>
+                        <TextBlock Margin="0,0,0,8" Foreground="{StaticResource ChannelABrush}" FontSize="17" FontWeight="SemiBold" Text="03  Trama de prueba · datos de 1–16 bits" />
                         <TextBlock x:Name="FrameInfoText" TextWrapping="Wrap" />
                         <Button x:Name="PlayFrameButton" Content="Reproducir trama de prueba" Padding="12" Margin="0,8,0,0" Click="PlayFrame_Click" />
                         <TextBlock x:Name="StatusText" Margin="0,16,0,0" TextWrapping="Wrap" Text="Tonos de prueba: 1 segundo, amplitud 0,15." />
@@ -145,15 +169,16 @@
                     </Border>
                   </ScrollViewer></TabItem>
 <TabItem Header="FDM · tonos"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <Border Padding="12">
+                    <Border Style="{StaticResource TransmitterPanel}" MaxWidth="740" HorizontalAlignment="Left">
                       <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Prueba FDM · dos tonos simultáneos · 1 segundo" />
-                        <TextBlock Text="Canal A:" />
+                        <TextBlock Text="Tonos FDM" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
+                        <TextBlock Text="Los canales A y B se reproducen simultáneamente durante 1 segundo." Style="{StaticResource Caption}" Margin="0,0,0,16"/>
+                        <TextBlock Text="Canal A · 1200 / 1900 Hz" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold" />
                         <ComboBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmBitAComboBox" SelectedIndex="0" Margin="0,4,0,8">
                           <ComboBoxItem Content="Bit 0 · 1200 Hz" />
                           <ComboBoxItem Content="Bit 1 · 1900 Hz" />
                         </ComboBox>
-                        <TextBlock Text="Canal B:" />
+                        <TextBlock Text="Canal B · 3000 / 3700 Hz" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold" />
                         <ComboBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmBitBComboBox" SelectedIndex="0" Margin="0,4,0,8">
                           <ComboBoxItem Content="Bit 0 · 3000 Hz" />
                           <ComboBoxItem Content="Bit 1 · 3700 Hz" />
@@ -165,12 +190,13 @@
                     </Border>
                   </ScrollViewer></TabItem>
 <TabItem Header="FDM · secuencias"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <Border Padding="12">
+                    <Border Style="{StaticResource TransmitterPanel}" MaxWidth="740" HorizontalAlignment="Left">
                       <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Secuencias FDM simultáneas · igual longitud (1–16 bits)" />
-                        <TextBlock Text="Bits del canal A:" />
+                        <TextBlock Text="Secuencias FDM" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
+                        <TextBlock Text="Dos secuencias simultáneas, de igual longitud (1–16 bits)." Style="{StaticResource Caption}" Margin="0,0,0,16"/>
+                        <TextBlock Text="Bits del canal A · 1200 / 1900 Hz" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold" />
                         <TextBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmSequenceATextBox" Text="10110010" Padding="8" TextChanged="FdmSequences_TextChanged" />
-                        <TextBlock Text="Bits del canal B:" Margin="0,8,0,0" />
+                        <TextBlock Text="Bits del canal B · 3000 / 3700 Hz" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold" Margin="0,12,0,0" />
                         <TextBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmSequenceBTextBox" Text="01001101" Padding="8" TextChanged="FdmSequences_TextChanged" />
                         <TextBlock x:Name="FdmSequencesInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <Button x:Name="PlayFdmSequencesButton" Content="Reproducir ambas secuencias" Padding="12" Margin="0,8,0,0" Click="PlayFdmSequences_Click" />
@@ -179,12 +205,13 @@
                     </Border>
                   </ScrollViewer></TabItem>
 <TabItem Header="FDM · tramas"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <Border Padding="12">
+                    <Border Style="{StaticResource TransmitterPanel}" MaxWidth="740" HorizontalAlignment="Left">
                       <StackPanel>
-                        <TextBlock Margin="0,24,0,8" FontWeight="SemiBold" Text="Tramas FDM simultáneas · datos de igual longitud (1–16 bits)" />
-                        <TextBlock Text="Datos A:" />
+                        <TextBlock Text="Tramas FDM" Style="{StaticResource Heading}" Margin="0,0,0,2"/>
+                        <TextBlock Text="Dos tramas completas simultáneas; los datos de prueba tienen igual longitud (1–16 bits)." Style="{StaticResource Caption}" Margin="0,0,0,16"/>
+                        <TextBlock Text="Datos A" Foreground="{StaticResource ChannelABrush}" FontWeight="SemiBold" />
                         <TextBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmFrameATextBox" Text="10110010" Padding="8" TextChanged="FdmFrames_TextChanged" />
-                        <TextBlock Text="Datos B:" Margin="0,8,0,0" />
+                        <TextBlock Text="Datos B" Foreground="{StaticResource ChannelBBrush}" FontWeight="SemiBold" Margin="0,12,0,0" />
                         <TextBox MaxWidth="420" HorizontalAlignment="Left" x:Name="FdmFrameBTextBox" Text="01001101" Padding="8" TextChanged="FdmFrames_TextChanged" />
                         <TextBlock x:Name="FdmFramesInfoText" TextWrapping="Wrap" Margin="0,8,0,0" />
                         <Button x:Name="PlayFdmFramesButton" Content="Reproducir ambas tramas" Padding="12" Margin="0,8,0,0" Click="PlayFdmFrames_Click" />
@@ -192,7 +219,14 @@
                       </StackPanel>
                     </Border>
                   </ScrollViewer></TabItem></TabControl></TabItem>
-            <TabItem Header="Señal generada"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions><WrapPanel Margin="4,6"><TextBlock Text="Último buffer digital preparado · no es recepción acústica" VerticalAlignment="Center"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Margin="8,0"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click"/></WrapPanel><visual:SignalMonitorView x:Name="GeneratedSignalMonitor" Grid.Row="1"/></Grid></TabItem>
+            <TabItem Header="Señal generada"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+              <Border Style="{StaticResource TransmitterActionPanel}" Margin="4,0,4,8"><StackPanel>
+                <TextBlock Text="Última señal digital generada" FontSize="17" FontWeight="SemiBold"/>
+                <TextBlock Text="El monitor conserva el último buffer preparado o reproducido; puede ser anterior al mensaje actual. No mide recepción acústica." Style="{StaticResource Caption}" Margin="0,3,0,8"/>
+                <WrapPanel><Button Content="Volver a mensajes" Click="BackToTransmitMessages_Click" Margin="0,0,8,4"/><Button Content="Recalcular monitor" Click="RetryGeneratedMonitor_Click" Margin="0,0,8,4"/><Button Content="Cancelar monitor" Click="CancelGeneratedMonitor_Click" Margin="0,0,0,4"/></WrapPanel>
+              </StackPanel></Border>
+              <visual:SignalMonitorView x:Name="GeneratedSignalMonitor" Grid.Row="1"/>
+            </Grid></TabItem>
           </TabControl>
         </Grid>
       </TabItem>
