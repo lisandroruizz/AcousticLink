@@ -120,10 +120,39 @@ var thread = new Thread(() =>
         Invoke("InvalidateAudioAnalysis"); Pump(); Require(ReferenceEquals(view.Data, generated), "Cambiar audio no atribuye el buffer generado a la captura");
         Find<ComboBox>("MonitorSourceComboBox").SelectedIndex = 0; Require(view.Data is null, "Invalidación del audio observado");
         Invoke("RefreshCapture"); Wait(() => view.Data is not null);
-        foreach (var size in new[] { new Size(1366, 768), new Size(1920, 1080), new Size(1366 / 1.25, 768 / 1.25) })
+        Require(Find<TabControl>("MainSectionsTabs").SelectedIndex == 0 && Find<TabControl>("DashboardTools").SelectedIndex == 1 && view.IsLoaded && view.IsVisible,
+            "Monitor cargado en la pestaña activa del Panel general");
+        var workspaceScroll = Find<ScrollViewer>("DashboardMonitorScroll");
+        foreach (var size in new[] { new Size(1366, 768), new Size(1180, 740), new Size(820, 600), new Size(1366 / 1.25, 768 / 1.25), new Size(1920, 1080) })
         {
             window.Width = size.Width; window.Height = size.Height; Pump();
-            Require(view.ActualWidth > 650 && view.ActualHeight > 350, "Área estable en resoluciones de escritorio y equivalencia lógica al 125 %");
+            if (args.Length > 2) { var shot = new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32); shot.Render(window); var png = new System.Windows.Media.Imaging.PngBitmapEncoder(); png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(shot)); using var output = System.IO.File.Create(System.IO.Path.Combine(args[2], $"monitor-{size.Width:0}-{size.Height:0}.png")); png.Save(output); }
+            Require(view.ActualWidth > (size.Width < 1000 ? 500 : 650) && view.ActualHeight >= 320, "Área estable en resoluciones de escritorio y equivalencia lógica al 125 %");
+            var signalScroll = (ScrollViewer)((TabItem)toolSelector.Items[0]).Content;
+            var waveform = (FrameworkElement)typeof(SignalMonitorView).GetField("waveform", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view)!;
+            var carriers = (FrameworkElement)typeof(SignalMonitorView).GetField("carriers", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view)!;
+            Require(toolSelector.SelectedIndex == 0 && signalScroll.IsVisible && signalScroll.ViewportHeight >= 100 && waveform.IsVisible && carriers.IsVisible && waveform.ActualHeight >= 80 && carriers.ActualHeight >= 112,
+                $"Señal y detección mantiene acceso a ambos gráficos en el área compacta: tamaño {view.ActualWidth:0}×{view.ActualHeight:0}, pestaña {toolSelector.SelectedIndex} alto {toolSelector.ActualHeight:0}, visor {signalScroll.ViewportHeight:0}/{signalScroll.ActualHeight:0} visible {signalScroll.IsVisible}, onda {waveform.ActualHeight:0} visible {waveform.IsVisible}, portadoras {carriers.ActualHeight:0} visible {carriers.IsVisible}");
+            if (args.Length > 2) Console.WriteLine($"Monitor {size.Width:0}×{size.Height:0}: vista {view.ActualWidth:0}×{view.ActualHeight:0}, visor {signalScroll.ViewportHeight:0}, desplazamiento {workspaceScroll.ScrollableHeight:0}");
+            double VisibleHeight(FrameworkElement element)
+            {
+                double top = element.TranslatePoint(new Point(), workspaceScroll).Y;
+                return Math.Max(0, Math.Min(top + element.ActualHeight, workspaceScroll.ViewportHeight) - Math.Max(top, 0));
+            }
+            Require(workspaceScroll.ViewportHeight >= 160 && VisibleHeight(waveform) >= 50, "La onda y los controles temporales están accesibles al abrir el monitor");
+            var timeTools = ((Grid)view.Content).Children.OfType<ScrollViewer>().Single();
+            Require(timeTools.IsVisible && timeTools.ViewportWidth >= 300, "Navegación temporal disponible en el ancho compacto");
+            if (timeTools.ScrollableWidth > 0)
+            {
+                timeTools.ScrollToRightEnd(); Pump();
+                Require(timeTools.HorizontalOffset >= timeTools.ScrollableWidth - 1, "El desplazamiento horizontal alcanza los últimos controles temporales");
+                timeTools.ScrollToLeftEnd(); Pump();
+            }
+            double energyBottom = carriers.TranslatePoint(new Point(0, carriers.ActualHeight), workspaceScroll).Y;
+            workspaceScroll.ScrollToVerticalOffset(workspaceScroll.VerticalOffset + Math.Max(0, energyBottom - workspaceScroll.ViewportHeight)); Pump();
+            Require(VisibleHeight(carriers) >= 80, "El desplazamiento permite visualizar el gráfico de energías");
+            if (args.Length > 2 && size.Width < 1100) { var shot = new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32); shot.Render(window); var png = new System.Windows.Media.Imaging.PngBitmapEncoder(); png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(shot)); using var output = System.IO.File.Create(System.IO.Path.Combine(args[2], $"monitor-{size.Width:0}-{size.Height:0}-desplazado.png")); png.Save(output); }
+            workspaceScroll.ScrollToTop(); Pump();
         }
         window.Width = 1366; window.Height = 768; view.Zoom(0, view.Data!.Signal.Duration); Pump();
         if (args.Length > 0)

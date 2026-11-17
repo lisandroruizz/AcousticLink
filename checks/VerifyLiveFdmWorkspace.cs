@@ -59,7 +59,7 @@ var thread = new Thread(() =>
         Call("RefreshCapture");
         var inspector = (ReceptionProgressView)window.FindName("LiveReceptionInspector");
         var monitor = (SignalMonitorView)window.FindName("ReceiverSignalMonitor");
-        Require(inspector.Activity!.Mode == "CAPTURANDO · DECODIFICACIÓN EN VIVO" && inspector.Activity.ProcessedSamples == 48000 * 5 && inspector.Activity.ChannelA.HammingWords > 2 && inspector.Activity.ChannelA.CrcValid is null, "La captura sigue activa y el estado visible ya contiene longitud y palabras procesadas");
+        Require(inspector.Activity!.Mode == "FDM · CAPTURANDO · DECODIFICACIÓN EN VIVO" && inspector.Activity.ProcessedSamples == 48000 * 5 && inspector.Activity.ChannelA.HammingWords > 2 && inspector.Activity.ChannelA.CrcValid is null, "La captura sigue activa y el estado visible ya contiene longitud y palabras procesadas");
         var energy = new IncrementalSignalMonitor(48000, audio.SampleCapacity); energy.Append(samples.AsSpan(0, 48000 * 5));
         var map = energy.Snapshot(MonitorSignalOrigin.Microphone, "Captura sintética; no hardware"); map = map.WithSignal(map.Signal with { SourceId = audio });
         monitor.BeginLive("Prueba sintética"); monitor.UpdateLive(map); Call("QueueReceptionObservation", map, audio, false);
@@ -84,7 +84,7 @@ var thread = new Thread(() =>
         Require(lab.Selection?.Trace is not null, "Finalizar conserva seleccionado el último símbolo histórico");
         monitor.Show(map.WithSignal(map.Signal with { Samples = samples.ToArray() }));
         Require(lab.Selection?.Trace is not null, "Publicar el buffer final de la misma fuente no borra símbolos ni selección");
-        Require(a.Result?.IsReceiving == false && a.Result?.CrcValid == true && inspector.Activity!.Mode == "CAPTURA FINALIZADA · RESULTADOS INCREMENTALES RETENIDOS", "Cierre sin pérdida y cambio real de modo");
+        Require(a.Result?.IsReceiving == false && a.Result?.CrcValid == true && inspector.Activity!.Mode == "FDM · CAPTURA FINALIZADA · RESULTADOS INCREMENTALES RETENIDOS", "Cierre sin pérdida y cambio real de modo");
         var labChannel = (ComboBox)typeof(ReceiverInterpretationView).GetField("channel", flags)!.GetValue(lab)!;
         labChannel.SelectedIndex = 1; monitor.SetCursor(10.95);
         var group = (System.Windows.Controls.WrapPanel)typeof(ReceiverInterpretationView).GetField("wordBits", flags)!.GetValue(lab)!;
