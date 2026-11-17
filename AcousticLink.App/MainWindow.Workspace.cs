@@ -12,12 +12,17 @@ public partial class MainWindow
 
     private void UpdateDashboardLayout()
     {
-        if (DashboardTransmitGrid is null || DashboardSecondaryGrid is null || DashboardReceptionGrid is null ||
+        if (DashboardTransmitGrid is null || DashboardWorkspaceGrid is null || DashboardReceptionGrid is null ||
             TransmitChannelBPanel is null || ReceptionChannelBPanel is null) return;
         ArrangeDashboardPair(DashboardTransmitGrid, DashboardTransmitACard, DashboardTransmitGrid.Children.OfType<Border>().Last(),
-            DashboardTransmitGrid.ActualWidth < 640, TransmitChannelBPanel.Visibility == Visibility.Collapsed);
-        ArrangeDashboardPair(DashboardSecondaryGrid, DashboardConfiguration, DashboardSignalCard,
-            DashboardSecondaryGrid.ActualWidth < 640, false);
+            DashboardTransmitGrid.ActualWidth < 520, TransmitChannelBPanel.Visibility == Visibility.Collapsed);
+        bool compact = DashboardWorkspaceGrid.ActualWidth < 760;
+        DashboardWorkspaceGrid.ColumnDefinitions[1].Width = new GridLength(compact ? 0 : 10);
+        DashboardWorkspaceGrid.ColumnDefinitions[2].Width = compact ? new GridLength(0) : new GridLength(300);
+        Grid.SetColumnSpan(DashboardActivityPanel, compact ? 3 : 1);
+        Grid.SetColumn(DashboardSignalCard, compact ? 0 : 2);
+        Grid.SetColumnSpan(DashboardSignalCard, compact ? 3 : 1);
+        Grid.SetRow(DashboardSignalCard, compact ? 1 : 0);
         ArrangeDashboardPair(DashboardReceptionGrid, DashboardReceptionACard, DashboardReceptionBCard,
             DashboardReceptionGrid.ActualWidth < 390, ReceptionChannelBPanel.Visibility == Visibility.Collapsed);
     }

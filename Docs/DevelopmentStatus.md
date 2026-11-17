@@ -1,5 +1,16 @@
 # Estado de desarrollo de AcousticLink
 
+## Estudio de señales · Panel general · 16-11-2026
+
+Rama `feature/wpf-dashboard-signal-studio`, HEAD inicial `66219159f5dc1688ab1ff4b2fc891cdd0e9d1c58`, igual a `main` con Calibración integrada; árbol limpio al comenzar. Sin commit, merge ni push.
+
+- **Objetivo y distribución:** se reemplazó la sucesión de tarjetas por una barra operativa continua (estado general, escucha y modalidad del Emisor), un área principal de actividad de señal y edición/transmisión, y un inspector lateral de Receptor con estado de captura, escucha y último resultado mostrado. En ancho menor a 760 px el inspector se apila y la operación permanece accesible mediante desplazamiento vertical. El vacío de señal ocupa 72 px; con muestras reales ocupa 212 px.
+- **Datos y decisiones:** la vista breve conserva la fuente y escala del monitor ya existente. Diferencia salida digital generada, micrófono y WAV; BFSK generado muestra solo las dos portadoras A. El resumen de Receptor usa el estado de captura real, sin atribuirle reproducción del Emisor. La advertencia separa escucha/captura de CRC validado y señala que el resultado mostrado puede ser histórico. Se conservaron bindings, Hamming, perfil FDM, composición de tramas, transmisión directa y monitor completo; la navegación lateral da acceso a las otras cuatro secciones. No se modificaron algoritmos ni servicios de audio.
+- **Archivos:** `AcousticLink.App/MainWindow.xaml`, `AcousticLink.App/MainWindow.Workspace.cs`, `AcousticLink.App/Visualization/SignalMiniView.cs`, `checks/VerifyWpfDashboard.cs` y este documento.
+- **Verificación:** `dotnet build AcousticLink.slnx --no-restore -p:NuGetAudit=false -p:OutputPath=..\.build\dashboard-signal-studio\` aprobó con 0 errores y aviso `NU1900` por índice NuGet inaccesible (dos avisos durante la primera compilación XAML). Aprobaron `VerifyWpfDashboard` y `VerifyCompactLayout`; el primero comprueba bindings, navegación, apilado a 820 px, acceso a Transmitir por desplazamiento y distinción de fuente en datos controlados. `git diff --check` se ejecutó sobre los cambios finales.
+- **Evidencia visual:** capturas WPF en `C:\Users\licho\.codex\visualizations\2026\11\17\01a1e737-f189-7bf2-b7ee-92f459b40c3d\dashboard-signal-studio\`: FDM a 1180 × 740 y 1366 × 768, 820 × 600, 1093 × 614 como equivalente lógico del 125 %, y trazados sintéticos etiquetados como salida digital y micrófono. El check también renderizó BFSK. Se revisaron jerarquía, espacio vacío, inspector, legibilidad y ausencia de solapamiento visible. Los trazados sintéticos son solo evidencia de presentación.
+- **Pendiente:** DPI físico al 125 %, cambios de estado durante uso de micrófono/parlantes reales y enlace acústico entre equipos. La compilación y los renders no demuestran una recepción física válida.
+
 ## Estudio de señales · Calibración · 16-11-2026
 
 Rama `feature/wpf-calibration-signal-studio`, HEAD inicial `d130c3717a1edef9310e3e7d746d61a37c1f1cc5`, igual a `main` con Receptor, Análisis y Emisor integrados; árbol limpio al comenzar. Sin commit, merge ni push.

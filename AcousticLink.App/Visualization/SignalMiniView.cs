@@ -20,15 +20,16 @@ public sealed class SignalMiniView : FrameworkElement
     public int DetailSampleCount => last - first;
     public bool IsLive { get; private set; }
     public MonitorSignalOrigin? Origin { get; private set; }
-    public SignalMiniView() { Height = 212; }
+    public SignalMiniView() { Height = 72; }
     public void SetWaiting(MonitorSignalOrigin origin)
-    { Origin = origin; IsLive = true; data = global = null; first = last = 0; caption = origin == MonitorSignalOrigin.Generated ? "Salida digital · esperando posición" : "Micrófono · esperando muestras"; InvalidateVisual(); }
+    { Origin = origin; IsLive = true; data = global = null; first = last = 0; Height = 72; caption = origin == MonitorSignalOrigin.Generated ? "Salida digital · esperando posición" : "Micrófono · esperando muestras"; InvalidateVisual(); }
     public void Update(CarrierEnergyMap? current, WaveformBucket[] values, double start, double end, bool live,
         double? position = null, CarrierEnergyMap? complete = null)
     {
         // values ya pertenece a la ventana del monitor grande. El global usa su resumen completo,
         // y el detalle lee como máximo 10 ms del buffer compuesto, nunca contribuciones separadas.
         data = current; global = complete ?? current;
+        Height = current is null ? 72 : 212;
         StartSeconds = start; EndSeconds = end; IsLive = live; Origin = current?.Signal.Origin;
         CursorSeconds = current is null ? 0 : Math.Clamp(position ?? (live ? current.Signal.Duration : start), 0, current.Signal.Duration);
         first = last = 0; VerticalLimit = 1;
@@ -42,7 +43,7 @@ public sealed class SignalMiniView : FrameworkElement
             foreach (float value in current.Signal.Samples.Span.Slice(first, width)) peak = Math.Max(peak, Math.Abs((double)value));
             VerticalLimit = peak > 0 ? peak * 1.1 : 1;
         }
-        caption = current is null ? "Sin señal disponible" : $"{(Origin == MonitorSignalOrigin.Generated ? "Digital A+B · no es micrófono" : Origin == MonitorSignalOrigin.Microphone ? "Micrófono" : "WAV · estático")} · {(live ? "en vivo" : "detenido")}";
+        caption = current is null ? "Sin señal disponible" : $"{(Origin == MonitorSignalOrigin.Generated ? current.Signal.BfskFrameBits is not null ? "Digital BFSK · no es micrófono" : "Digital FDM A+B · no es micrófono" : Origin == MonitorSignalOrigin.Microphone ? "Micrófono" : "WAV · estático")} · {(live ? "en vivo" : "detenido")}";
         InvalidateVisual();
     }
     protected override void OnRender(DrawingContext dc)
@@ -83,12 +84,13 @@ public sealed class SignalMiniView : FrameworkElement
         if (data.Windows.Count > 0)
         {
             var frame = data.Windows[data.WindowAt(CursorSeconds)];
-            for (int i = 0; i < 4; i++)
+            int carriers = data.Signal.BfskFrameBits is null ? 4 : 2;
+            for (int i = 0; i < carriers; i++)
             {
-                double x = 6 + i * ActualWidth / 4; Label(new[] { "A0", "A1", "B0", "B1" }[i], x, 194);
+                double x = 6 + i * ActualWidth / carriers; Label(new[] { "A0", "A1", "B0", "B1" }[i], x, 194);
                 double level = Math.Clamp((CarrierEnergyMap.Decibels(frame.Energy(i)) + 100) / 100, 0, 1);
-                dc.DrawRectangle(Brushes.DarkSlateGray, null, new Rect(x + 23, 198, Math.Max(1, ActualWidth / 4 - 34), 5));
-                dc.DrawRectangle(i < 2 ? Brushes.LightSkyBlue : Brushes.SandyBrown, null, new Rect(x + 23, 198, Math.Max(1, ActualWidth / 4 - 34) * level, 5));
+                dc.DrawRectangle(Brushes.DarkSlateGray, null, new Rect(x + 23, 198, Math.Max(1, ActualWidth / carriers - 34), 5));
+                dc.DrawRectangle(i < 2 ? Brushes.LightSkyBlue : Brushes.SandyBrown, null, new Rect(x + 23, 198, Math.Max(1, ActualWidth / carriers - 34) * level, 5));
             }
         }
         ToolTip = "Actividad A0=1200, A1=1900, B0=3000, B1=3700 Hz · escala −100…0 dB digital. Energía no equivale a bit válido.";

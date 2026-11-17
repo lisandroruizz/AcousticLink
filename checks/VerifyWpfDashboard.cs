@@ -52,8 +52,11 @@ var thread = new Thread(() =>
         Require(transmit.Template.FindName("KeyboardFocus", transmit) is Border, "Contorno de foco compartido disponible");
         var editorA = Find<TextBox>("FdmTextATextBox");
         var dashboard = (StackPanel)Find<ScrollViewer>("DashboardOperationScroll").Content;
-        var channelGrid = dashboard.Children.OfType<Grid>().First();
-        Require(ReferenceEquals(channelGrid, Find<Grid>("DashboardTransmitGrid")), "Canales del panel general en una única región operativa");
+        var workspace = Find<Grid>("DashboardWorkspaceGrid");
+        var channelGrid = Find<Grid>("DashboardTransmitGrid");
+        Require(ReferenceEquals(workspace, dashboard.Children.OfType<Grid>().Single()) &&
+            Find<AcousticLink.App.Visualization.SignalMiniView>("MiniSignalMonitor") is not null,
+            "Panel general prioriza la actividad de señal y mantiene los canales operativos");
         var dashboardA = ((StackPanel)channelGrid.Children.OfType<Border>().First().Child).Children.OfType<TextBox>().Single();
         Require(dashboardA.Text == editorA.Text && dashboardA.Text == "Hola", "Enlace inicial a editor en pestaña inactiva");
         dashboardA.Text = "ñ";
@@ -107,15 +110,17 @@ var thread = new Thread(() =>
             "Emisor apila configuración y conserva Transmitir al ancho mínimo");
         tabs.SelectedIndex = 0; Pump();
         Require(Grid.GetRow(Find<Border>("DashboardSignalCard")) == 1 &&
-            Find<Border>("DashboardConfiguration").ActualWidth > 300,
+            Find<Border>("DashboardConfiguration").ActualWidth > 300 &&
+            workspace.DesiredSize.Width <= workspace.ActualWidth + 1,
             "Panel general apila operación y captura en ventana estrecha");
         var captureCardText = ((StackPanel)Find<Border>("DashboardSignalCard").Child).Children.OfType<TextBlock>().ToArray();
         var generalState = Find<TextBlock>("GeneralStateText");
-        string previousState = generalState.Text;
-        generalState.Text = "Capturando audio"; Pump();
-        Require(captureCardText.Any(text => text.Text == "Capturando audio"),
+        var liveCapture = Find<TextBlock>("LiveCaptureText");
+        string previousState = generalState.Text, previousCapture = liveCapture.Text;
+        liveCapture.Text = "Grabando · ensayo sintético"; Pump();
+        Require(captureCardText.Any(text => text.Text == "Grabando · ensayo sintético"),
             "La captura manual se refleja en el resumen del receptor");
-        generalState.Text = previousState;
+        liveCapture.Text = previousCapture;
         tabs.SelectedIndex = 1; tools.SelectedIndex = 1; Pump();
         var technicalTabs = (TabControl)((TabItem)tools.Items[1]).Content;
         foreach (int index in new[] { 0, 1, 2, 3 })
@@ -161,7 +166,8 @@ var thread = new Thread(() =>
         if (args.Length > 1)
         {
             System.IO.Directory.CreateDirectory(args[1]);
-            void Capture(string name, int width, int height, int mode, int tool, int section = 1, int technical = -1)
+            void Capture(string name, int width, int height, int mode, int tool, int section = 1, int technical = -1,
+                string? state = null, string? captureState = null)
             {
                 window.Width = width; window.Height = height;
                 Find<ComboBox>("TransmitModeComboBox").SelectedIndex = mode;
@@ -176,6 +182,8 @@ var thread = new Thread(() =>
                 settle.Start(); Dispatcher.PushFrame(frame);
                 tabs.BeginAnimation(UIElement.OpacityProperty, null);
                 ((System.Windows.Media.TranslateTransform)tabs.RenderTransform).BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, null);
+                if (state is not null) generalState.Text = state;
+                if (captureState is not null) liveCapture.Text = captureState;
                 window.UpdateLayout();
                 var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                 bitmap.Render(window);
@@ -198,6 +206,37 @@ var thread = new Thread(() =>
             Capture("dashboard-bfsk-1366.png", 1366, 768, 0, 0, 0);
             Capture("dashboard-logical125.png", 1093, 614, 1, 0, 0);
             Capture("dashboard-minimum.png", 820, 600, 1, 0, 0);
+            var dashboardScroll = Find<ScrollViewer>("DashboardOperationScroll");
+            Require(Grid.GetRow(Find<Border>("DashboardSignalCard")) == 1 &&
+                dashboardScroll.ExtentWidth <= dashboardScroll.ViewportWidth + 1 &&
+                Find<AcousticLink.App.Visualization.SignalMiniView>("MiniSignalMonitor").Height == 72,
+                "Vista compacta apila inspector, evita desplazamiento horizontal y reduce señal vacía");
+            dashboardScroll.ScrollToEnd(); Pump();
+            Require(configuration.Children.OfType<Button>().Single().IsVisible,
+                "Transmisión directa permanece accesible con desplazamiento vertical");
+            dashboardScroll.ScrollToTop(); Pump();
+            var mini = Find<AcousticLink.App.Visualization.SignalMiniView>("MiniSignalMonitor");
+            var controlledSamples = Enumerable.Range(0, 4800).Select(i => (float)(0.1 * Math.Sin(2 * Math.PI * 1200 * i / 48000))).ToArray();
+            var digital = AcousticLink.App.Visualization.CarrierEnergyMap.Analyze(new(
+                controlledSamples, 48000, AcousticLink.App.Visualization.MonitorSignalOrigin.Generated, "Ensayo sintético de interfaz"));
+            generalState.Text = "Reproduciendo audio · ensayo sintético";
+            mini.Update(digital, [], 0, digital.Signal.Duration, true);
+            Require(mini.Origin == AcousticLink.App.Visualization.MonitorSignalOrigin.Generated && mini.Height == 212,
+                "Salida digital sintética conserva procedencia y área de señal");
+            Capture("dashboard-synthetic-output.png", 1366, 768, 1, 0, 0,
+                state: "Reproduciendo audio · ensayo sintético");
+            var microphone = AcousticLink.App.Visualization.CarrierEnergyMap.Analyze(new(
+                controlledSamples, 48000, AcousticLink.App.Visualization.MonitorSignalOrigin.Microphone, "Ensayo sintético de interfaz"));
+            generalState.Text = "Capturando audio · ensayo sintético";
+            liveCapture.Text = "Grabando · ensayo sintético";
+            mini.Update(microphone, [], 0, microphone.Signal.Duration, true);
+            Require(mini.Origin == AcousticLink.App.Visualization.MonitorSignalOrigin.Microphone,
+                "Captura sintética se identifica como origen de micrófono sin declarar recepción válida");
+            Capture("dashboard-synthetic-capture.png", 1366, 768, 1, 0, 0,
+                state: "Capturando audio · ensayo sintético", captureState: "Grabando · ensayo sintético");
+            generalState.Text = previousState;
+            liveCapture.Text = previousCapture;
+            mini.Update(null, [], 0, 0, false);
             Find<TabControl>("DashboardTools").SelectedIndex = 1;
             Find<ComboBox>("MonitorSourceComboBox").SelectedIndex = 0;
             Capture("dashboard-monitor-empty.png", 1180, 740, 1, 0, 0);
