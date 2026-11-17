@@ -28,6 +28,8 @@ var thread = new Thread(() =>
         Require(Find<TextBlock>("CalibrationStateText").Text.Contains("referencia"), "Estado inicial");
         Require(!Find<Button>("CalibrationCaptureButton").IsEnabled && !Find<Button>("CalibrationWavButton").IsEnabled,
             "Prueba y WAV esperan referencia");
+        Require(Find<TextBlock>("CalibrationToneEmptyText").IsVisible && Find<StackPanel>("CalibrationToneRows").Children.Count == 0,
+            "Estado inicial sin barras ni datos inventados");
         Snapshot("inicial-1366x768.png");
         var mode = Find<ComboBox>("CalibrationModeCombo");
         mode.SelectedIndex = 1; Pump();
@@ -59,6 +61,7 @@ var thread = new Thread(() =>
         Pump(); window.UpdateLayout();
         Require(Find<StackPanel>("CalibrationToneRows").Children.Count == 2 &&
             Find<TextBlock>("CalibrationSignalHeading").Text.Contains("MICRÓFONO"), "BFSK sin canal B");
+        Require(!Find<TextBlock>("CalibrationToneEmptyText").IsVisible, "Las bandas medidas sustituyen el estado vacío");
         Require(Find<StackPanel>("CalibrationToneRows").Children.Cast<StackPanel>().All(row =>
             row.Children.OfType<Grid>().Count() == 2), "Barras de ruido y prueba");
         Find<TextBlock>("CalibrationStateText").Text = "Prueba sintética localizada · sin ensayo acústico físico";
@@ -67,6 +70,8 @@ var thread = new Thread(() =>
         window.Width = 1366 / 1.25; window.Height = 768 / 1.25; Pump(); Snapshot("bfsk-logical125.png");
         window.Width = 820; window.Height = 600; Pump(); Snapshot("bfsk-min-width.png");
         Require(Find<Border>("CalibrationQuickActions").IsVisible, "Acción rápida visible en ancho mínimo");
+        Require(Find<ScrollViewer>("CalibrationResultsScroll").ViewportWidth > 500 &&
+            Find<ScrollViewer>("CalibrationStepsScroll").ViewportHeight > 130, "Resultados amplios y procedimiento desplazable a 820 px");
         window.Width = 1366; window.Height = 768; Pump();
         typeof(MainWindow).GetMethod("ClearCalibrationTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
         Require(Find<TextBlock>("CalibrationSignalSummary").Text == "Pendiente" &&
@@ -84,6 +89,7 @@ var thread = new Thread(() =>
         mode.SelectedIndex = 1; Pump();
         Require(Find<StackPanel>("CalibrationToneRows").Children.Count == 0 &&
             Find<TextBlock>("CalibrationSignalText").Text == "No disponible" &&
+            Find<TextBlock>("CalibrationToneEmptyText").IsVisible &&
             !Find<Button>("CalibrationCaptureButton").IsEnabled && !Find<Button>("CalibrationWavButton").IsEnabled,
             "Resultados tardíos y acciones invalidados por modalidad");
         SetSyntheticReference(CalibrationMode.Fdm);
