@@ -1,5 +1,15 @@
 # Estado de desarrollo de AcousticLink
 
+## Estudio de señales · Calibración · 16-11-2026
+
+Rama `feature/wpf-calibration-signal-studio`, HEAD inicial `d130c3717a1edef9310e3e7d746d61a37c1f1cc5`, igual a `main` con Receptor, Análisis y Emisor integrados; árbol limpio al comenzar. Sin commit, merge ni push.
+
+- **Alcance:** Calibración conserva preparación, referencia de ruido, prueba conocida e interpretación. La operación se compactó en una columna desplazable de 340 px; las mediciones ocupan el resto del escritorio. En área de trabajo menor a 900 px, las acciones rápidas de referencia/prueba quedan arriba y procedimiento/resultados se apilan con desplazamiento vertical. Se reutilizaron los recursos existentes de Estudio de señales, sin modificar estilos compartidos ni otras secciones.
+- **Lectura:** estado y validez, referencia y prueba, bandas por frecuencia y recomendaciones quedan en una secuencia continua. RMS, dBFS, pico, formato y origen siguen en detalle técnico desplegable. Las bandas muestran solo resultados del análisis: estado vacío sin barras antes de medir o cuando no hay tonos evaluables; BFSK usa solo canal A y FDM muestra A/B. Las barras conservan escala relativa y números de potencia digital, sin presentarlos como dB SPL. Se diferenciaron visualmente captura, referencia disponible, invalidación, inconcluso, cancelación y error, sin cambiar sus reglas técnicas.
+- **Archivos:** `AcousticLink.App/MainWindow.xaml`, `AcousticLink.App/MainWindow.Calibration.cs`, `checks/VerifyCalibrationWorkspace.cs` y este documento. El check agrega comprobaciones de vacío, invalidación, área de resultados y acceso al procedimiento en 820 px.
+- **Verificación:** compilación aislada de `AcousticLink.slnx` con 0 errores y 2 avisos `NU1900` por consulta NuGet inaccesible. Aprobaron `VerifyCalibrationWorkspace`, `VerifyAcousticCalibration`, `VerifyWpfDashboard` y `VerifyAudioCapture` con datos controlados; `VerifyCompactLayout` se ejecutó por separado con nombre temporal corto por el límite de ruta de `dotnet run --file`. `git diff --check` aprobó. Las capturas WPF en `C:\Users\licho\.codex\visualizations\2026\11\16\01a1e6c1-7f27-7cb0-bd03-82988b623263\calibration-studio\` muestran vacío, BFSK, FDM, inconcluso, WAV y tamaños 1366 × 768, 1180 × 740, 820 × 600 y equivalente lógico de 125 %; los resultados visibles son sintéticos y están identificados.
+- **Pendiente:** ensayo con micrófono/parlantes reales entre equipos, cancelación/error de dispositivo real y DPI físico al 125 %. La revisión sintética y la compilación no demuestran transmisión acústica física.
+
 ## Estudio de señales · Emisor · 16-11-2026
 
 Rama `feature/wpf-transmitter-signal-studio`, HEAD inicial `9e6f73f557cad83fb013504a5492c3e31c857e0d`, igual a `main` con Receptor y Análisis integrados; árbol limpio al comenzar. No se realizó commit, merge ni push.
